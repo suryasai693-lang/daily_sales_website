@@ -1,0 +1,2641 @@
+const express = require("express");
+const ExcelJS = require("exceljs");
+const path = require("path");
+const fs = require("fs");
+
+const app = express();
+
+app.use(express.json());
+app.use(express.static("public"));
+
+
+// =====================================================
+// EXCEL FILE PATH
+// =====================================================
+
+const filePath = path.join(
+    __dirname,
+    "data",
+    "sales.xlsx"
+);
+
+
+// =====================================================
+// CHECK FILE
+// =====================================================
+
+if (!fs.existsSync(filePath)) {
+
+    console.log("sales.xlsx not found!");
+
+    process.exit();
+
+}
+
+
+// =====================================================
+// HELPER FUNCTIONS
+// =====================================================
+
+function getText(value) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+
+        return "";
+
+    }
+
+    if (
+        typeof value === "object" &&
+        value.text !== undefined
+    ) {
+
+        return String(value.text).trim();
+
+    }
+
+    return String(value).trim();
+
+}
+
+
+// -----------------------------------------------------
+// Convert Excel date to YYYY-MM-DD
+// -----------------------------------------------------
+
+function getDate(value) {
+
+    if (!value) {
+
+        return "";
+
+    }
+
+
+    // Excel Date object
+
+    if (value instanceof Date) {
+
+        const year =
+            value.getFullYear();
+
+        const month =
+            String(
+                value.getMonth() + 1
+            ).padStart(2, "0");
+
+        const day =
+            String(
+                value.getDate()
+            ).padStart(2, "0");
+
+
+        return `${year}-${month}-${day}`;
+
+    }
+
+
+    return String(value).substring(0, 10);
+
+}
+
+
+// -----------------------------------------------------
+// Previous month
+// -----------------------------------------------------
+
+function getPreviousMonth(month) {
+
+    const date =
+        new Date(
+            `${month}-01T00:00:00`
+        );
+
+
+    date.setMonth(
+        date.getMonth() - 1
+    );
+
+
+    const year =
+        date.getFullYear();
+
+
+    const monthNumber =
+        String(
+            date.getMonth() + 1
+        ).padStart(2, "0");
+
+
+    return `${year}-${monthNumber}`;
+
+}
+
+
+// =====================================================
+// GET ITEMS
+// =====================================================
+
+app.get(
+    "/items",
+    async (req, res) => {
+
+        try {
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+
+            await workbook.xlsx.readFile(
+                filePath
+            );
+
+
+            const sheet =
+                workbook.getWorksheet(
+                    "ITEM_MASTER"
+                );
+
+
+            if (!sheet) {
+
+                return res.status(500).json({
+
+                    message:
+                        "ITEM_MASTER sheet not found"
+
+                });
+
+            }
+
+
+            const items = [];
+
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= sheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    sheet.getRow(rowNumber);
+
+
+                const itemName =
+                    getText(
+                        row.getCell(1).value
+                    );
+
+
+                if (!itemName) {
+
+                    continue;
+
+                }
+
+
+                const price =
+                    Number(
+                        row.getCell(2).value || 0
+                    );
+
+
+                const openingStock =
+                    Number(
+                        row.getCell(3).value || 0
+                    );
+
+
+                items.push({
+
+                    name:
+                        itemName,
+
+                    price:
+                        price,
+
+                    openingStock:
+                        openingStock
+
+                });
+
+            }
+
+
+            res.json(items);
+
+        }
+
+        catch (error) {
+
+            console.error(error);
+
+
+            res.status(500).json({
+
+                message:
+                    "Unable to read items"
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// GET CURRENT STOCK
+// =====================================================
+
+app.get(
+    "/current-stock",
+    async (req, res) => {
+
+        try {
+
+            const itemName =
+                req.query.item;
+
+            const month =
+                req.query.month;
+
+
+            if (
+                !itemName ||
+                !month
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Item and month are required"
+
+                });
+
+            }
+
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+
+            await workbook.xlsx.readFile(
+                filePath
+            );
+
+
+            const itemSheet =
+                workbook.getWorksheet(
+                    "ITEM_MASTER"
+                );
+
+            const salesSheet =
+                workbook.getWorksheet(
+                    "SALES"
+                );
+
+            const supplySheet =
+                workbook.getWorksheet(
+                    "SUPPLY"
+                );
+
+            const stockSheet =
+                workbook.getWorksheet(
+                    "MONTHLY_STOCK"
+                );
+
+
+            // =================================================
+            // FIND ITEM
+            // =================================================
+
+            let itemPrice = 0;
+
+            let initialOpening = 0;
+
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= itemSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    itemSheet.getRow(rowNumber);
+
+
+                const name =
+                    getText(
+                        row.getCell(1).value
+                    );
+
+
+                if (
+                    name === itemName
+                ) {
+
+                    itemPrice =
+                        Number(
+                            row.getCell(2).value || 0
+                        );
+
+
+                    initialOpening =
+                        Number(
+                            row.getCell(3).value || 0
+                        );
+
+
+                    break;
+
+                }
+
+            }
+
+
+            // =================================================
+            // PREVIOUS MONTH
+            // =================================================
+
+            const previousMonth =
+                getPreviousMonth(month);
+
+
+            // =================================================
+            // OPENING STOCK
+            // =================================================
+
+            let openingStock =
+                initialOpening;
+
+
+            if (stockSheet) {
+
+                for (
+                    let rowNumber = 2;
+                    rowNumber <= stockSheet.rowCount;
+                    rowNumber++
+                ) {
+
+                    const row =
+                        stockSheet.getRow(
+                            rowNumber
+                        );
+
+
+                    const rowMonth =
+                        getText(
+                            row.getCell(1).value
+                        );
+
+
+                    const rowItem =
+                        getText(
+                            row.getCell(2).value
+                        );
+
+
+                    if (
+                        rowMonth === previousMonth &&
+                        rowItem === itemName
+                    ) {
+
+                        openingStock =
+                            Number(
+                                row.getCell(12).value || 0
+                            );
+
+                    }
+
+                }
+
+            }
+
+
+            // =================================================
+            // CURRENT MONTH SUPPLY
+            // =================================================
+
+            let currentSupply = 0;
+
+
+            if (supplySheet) {
+
+                for (
+                    let rowNumber = 2;
+                    rowNumber <= supplySheet.rowCount;
+                    rowNumber++
+                ) {
+
+                    const row =
+                        supplySheet.getRow(
+                            rowNumber
+                        );
+
+
+                    const rowMonth =
+                        getText(
+                            row.getCell(2).value
+                        );
+
+
+                    const rowItem =
+                        getText(
+                            row.getCell(3).value
+                        );
+
+
+                    if (
+                        rowMonth === month &&
+                        rowItem === itemName
+                    ) {
+
+                        currentSupply +=
+                            Number(
+                                row.getCell(4).value || 0
+                            );
+
+                    }
+
+                }
+
+            }
+
+
+            // =================================================
+            // CURRENT MONTH SALES
+            // =================================================
+
+            let currentSales = 0;
+
+
+            if (salesSheet) {
+
+                for (
+                    let rowNumber = 2;
+                    rowNumber <= salesSheet.rowCount;
+                    rowNumber++
+                ) {
+
+                    const row =
+                        salesSheet.getRow(
+                            rowNumber
+                        );
+
+
+                    const rowDate =
+                        getDate(
+                            row.getCell(1).value
+                        );
+
+
+                    const rowItem =
+                        getText(
+                            row.getCell(3).value
+                        );
+
+
+                    if (
+                        rowDate.startsWith(month) &&
+                        rowItem === itemName
+                    ) {
+
+                        currentSales +=
+                            Number(
+                                row.getCell(5).value || 0
+                            );
+
+                    }
+
+                }
+
+            }
+
+
+            // =================================================
+            // CALCULATE
+            // =================================================
+
+            const availableStock =
+                openingStock +
+                currentSupply -
+                currentSales;
+
+
+            const availableValue =
+                availableStock *
+                itemPrice;
+
+
+            // =================================================
+            // RESPONSE
+            // =================================================
+
+            res.json({
+
+                item:
+                    itemName,
+
+                price:
+                    itemPrice,
+
+                openingStock:
+                    openingStock,
+
+                supply:
+                    currentSupply,
+
+                sales:
+                    currentSales,
+
+                stock:
+                    availableStock,
+
+                value:
+                    availableValue
+
+            });
+
+        }
+
+        catch (error) {
+
+            console.error(error);
+
+
+            res.status(500).json({
+
+                message:
+                    "Unable to calculate current stock"
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// REBUILD MONTHLY STOCK
+// =====================================================
+
+async function rebuildMonthlyStock(
+    workbook,
+    month
+) {
+
+    const itemSheet =
+        workbook.getWorksheet(
+            "ITEM_MASTER"
+        );
+
+    const salesSheet =
+        workbook.getWorksheet(
+            "SALES"
+        );
+
+    const supplySheet =
+        workbook.getWorksheet(
+            "SUPPLY"
+        );
+
+    let stockSheet =
+        workbook.getWorksheet(
+            "MONTHLY_STOCK"
+        );
+
+
+    // =================================================
+    // CREATE MONTHLY STOCK SHEET IF MISSING
+    // =================================================
+
+    if (!stockSheet) {
+
+        stockSheet =
+            workbook.addWorksheet(
+                "MONTHLY_STOCK"
+            );
+
+    }
+
+
+    // =================================================
+    // REMOVE CURRENT MONTH
+    // =================================================
+
+    const rowsToDelete = [];
+
+
+    for (
+        let rowNumber = 2;
+        rowNumber <= stockSheet.rowCount;
+        rowNumber++
+    ) {
+
+        const row =
+            stockSheet.getRow(
+                rowNumber
+            );
+
+
+        const rowMonth =
+            getText(
+                row.getCell(1).value
+            );
+
+
+        if (
+            rowMonth === month
+        ) {
+
+            rowsToDelete.push(
+                rowNumber
+            );
+
+        }
+
+    }
+
+
+    rowsToDelete
+        .reverse()
+        .forEach(
+            rowNumber => {
+
+                stockSheet.spliceRows(
+                    rowNumber,
+                    1
+                );
+
+            }
+        );
+
+
+    // =================================================
+    // PREVIOUS MONTH
+    // =================================================
+
+    const previousMonth =
+        getPreviousMonth(month);
+
+
+    // =================================================
+    // PREVIOUS CLOSING STOCK
+    // =================================================
+
+    const previousClosing = {};
+
+
+    for (
+        let rowNumber = 2;
+        rowNumber <= stockSheet.rowCount;
+        rowNumber++
+    ) {
+
+        const row =
+            stockSheet.getRow(
+                rowNumber
+            );
+
+
+        const rowMonth =
+            getText(
+                row.getCell(1).value
+            );
+
+
+        const itemName =
+            getText(
+                row.getCell(2).value
+            );
+
+
+        if (
+            rowMonth === previousMonth
+        ) {
+
+            previousClosing[itemName] =
+                Number(
+                    row.getCell(12).value || 0
+                );
+
+        }
+
+    }
+
+
+    // =================================================
+    // READ ITEMS
+    // =================================================
+
+    const items = [];
+
+
+    for (
+        let rowNumber = 2;
+        rowNumber <= itemSheet.rowCount;
+        rowNumber++
+    ) {
+
+        const row =
+            itemSheet.getRow(
+                rowNumber
+            );
+
+
+        const itemName =
+            getText(
+                row.getCell(1).value
+            );
+
+
+        if (!itemName) {
+
+            continue;
+
+        }
+
+
+        const price =
+            Number(
+                row.getCell(2).value || 0
+            );
+
+
+        const initialOpening =
+            Number(
+                row.getCell(3).value || 0
+            );
+
+
+        items.push({
+
+            name:
+                itemName,
+
+            price:
+                price,
+
+            initialOpening:
+                initialOpening
+
+        });
+
+    }
+
+
+    // =================================================
+    // CALCULATE EACH ITEM
+    // =================================================
+
+    for (const item of items) {
+
+        // ---------------------------------------------
+        // OPENING
+        // ---------------------------------------------
+
+        let openingStock;
+
+
+        if (
+            previousClosing[item.name] !== undefined
+        ) {
+
+            openingStock =
+                previousClosing[item.name];
+
+        }
+
+        else {
+
+            openingStock =
+                item.initialOpening;
+
+        }
+
+
+        // ---------------------------------------------
+        // SUPPLY
+        // ---------------------------------------------
+
+        let supplyQuantity = 0;
+
+
+        if (supplySheet) {
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= supplySheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    supplySheet.getRow(
+                        rowNumber
+                    );
+
+
+                const rowMonth =
+                    getText(
+                        row.getCell(2).value
+                    );
+
+
+                const rowItem =
+                    getText(
+                        row.getCell(3).value
+                    );
+
+
+                if (
+                    rowMonth === month &&
+                    rowItem === item.name
+                ) {
+
+                    supplyQuantity +=
+                        Number(
+                            row.getCell(4).value || 0
+                        );
+
+                }
+
+            }
+
+        }
+
+
+        // ---------------------------------------------
+        // SALES
+        // ---------------------------------------------
+
+        let salesQuantity = 0;
+
+
+        if (salesSheet) {
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= salesSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    salesSheet.getRow(
+                        rowNumber
+                    );
+
+
+                const rowDate =
+                    getDate(
+                        row.getCell(1).value
+                    );
+
+
+                const rowItem =
+                    getText(
+                        row.getCell(3).value
+                    );
+
+
+                if (
+                    rowDate.startsWith(month) &&
+                    rowItem === item.name
+                ) {
+
+                    salesQuantity +=
+                        Number(
+                            row.getCell(5).value || 0
+                        );
+
+                }
+
+            }
+
+        }
+
+
+        // ---------------------------------------------
+        // CALCULATIONS
+        // ---------------------------------------------
+
+        const openingValue =
+            openingStock *
+            item.price;
+
+
+        const supplyValue =
+            supplyQuantity *
+            item.price;
+
+
+        const totalStock =
+            openingStock +
+            supplyQuantity;
+
+
+        const totalValue =
+            totalStock *
+            item.price;
+
+
+        const saleValue =
+            salesQuantity *
+            item.price;
+
+
+        const closingStock =
+            totalStock -
+            salesQuantity;
+
+
+        const closingValue =
+            closingStock *
+            item.price;
+
+
+        // ---------------------------------------------
+        // ADD ROW
+        // ---------------------------------------------
+
+        stockSheet.addRow([
+
+            month,
+
+            item.name,
+
+            item.price,
+
+            openingStock,
+
+            openingValue,
+
+            supplyQuantity,
+
+            supplyValue,
+
+            totalStock,
+
+            totalValue,
+
+            salesQuantity,
+
+            saleValue,
+
+            closingStock,
+
+            closingValue
+
+        ]);
+
+    }
+
+
+    // =================================================
+    // HEADER
+    // =================================================
+
+    const header =
+        stockSheet.getRow(1);
+
+
+    header.values = [
+
+        "MONTH",
+
+        "ITEM NAME",
+
+        "UNIT PRICE",
+
+        "OPENING STOCK",
+
+        "OPENING VALUE",
+
+        "SUPPLY",
+
+        "SUPPLY VALUE",
+
+        "TOTAL STOCK",
+
+        "TOTAL VALUE",
+
+        "SALES QUANTITY",
+
+        "SALE VALUE",
+
+        "CLOSING STOCK",
+
+        "CLOSING VALUE"
+
+    ];
+
+
+    header.font = {
+
+        bold: true
+
+    };
+
+
+    // =================================================
+    // COLUMN WIDTH
+    // =================================================
+
+    stockSheet.getColumn(1).width = 12;
+    stockSheet.getColumn(2).width = 35;
+    stockSheet.getColumn(3).width = 15;
+    stockSheet.getColumn(4).width = 16;
+    stockSheet.getColumn(5).width = 18;
+    stockSheet.getColumn(6).width = 12;
+    stockSheet.getColumn(7).width = 18;
+    stockSheet.getColumn(8).width = 15;
+    stockSheet.getColumn(9).width = 18;
+    stockSheet.getColumn(10).width = 18;
+    stockSheet.getColumn(11).width = 15;
+    stockSheet.getColumn(12).width = 18;
+    stockSheet.getColumn(13).width = 18;
+
+}
+
+// =====================================================
+// BUILD DAILY SALES REPORT
+// =====================================================
+
+// =====================================================
+// REBUILD DAILY SALES REPORT
+// =====================================================
+
+async function rebuildDailySalesReport(workbook) {
+
+    const salesSheet =
+        workbook.getWorksheet("SALES");
+
+
+    // =================================================
+    // DELETE OLD DAILY REPORT
+    // =================================================
+
+    const oldReport =
+        workbook.getWorksheet(
+            "DAILY_SALES_REPORT"
+        );
+
+
+    if (oldReport) {
+
+        workbook.removeWorksheet(
+            oldReport.id
+        );
+
+    }
+
+
+    // =================================================
+    // CREATE NEW DAILY REPORT
+    // =================================================
+
+    const reportSheet =
+        workbook.addWorksheet(
+            "DAILY_SALES_REPORT"
+        );
+
+
+    // =================================================
+    // STORE SALES BY DATE + ITEM
+    // =================================================
+
+    const dailySales = {};
+
+
+    for (
+        let rowNumber = 2;
+        rowNumber <= salesSheet.rowCount;
+        rowNumber++
+    ) {
+
+        const row =
+            salesSheet.getRow(
+                rowNumber
+            );
+
+
+        const date =
+            getDate(
+                row.getCell(1).value
+            );
+
+
+        const item =
+            getText(
+                row.getCell(3).value
+            );
+
+
+        const price =
+            Number(
+                row.getCell(4).value || 0
+            );
+
+
+        const quantity =
+            Number(
+                row.getCell(5).value || 0
+            );
+
+
+        const saleValue =
+            Number(
+                row.getCell(6).value || 0
+            );
+
+
+        // Ignore empty rows
+
+        if (
+            !date ||
+            !item
+        ) {
+
+            continue;
+
+        }
+
+
+        // Create date
+
+        if (!dailySales[date]) {
+
+            dailySales[date] = {};
+
+        }
+
+
+        // Create item
+
+        if (
+            !dailySales[date][item]
+        ) {
+
+            dailySales[date][item] = {
+
+                price: price,
+
+                quantity: 0,
+
+                saleValue: 0
+
+            };
+
+        }
+
+
+        // Add quantity
+
+        dailySales[date][item].quantity +=
+            quantity;
+
+
+        // Add sale value
+
+        dailySales[date][item].saleValue +=
+            saleValue;
+
+    }
+
+
+    // =================================================
+    // SORT DATES
+    // =================================================
+
+    const dates =
+        Object.keys(
+            dailySales
+        ).sort();
+
+
+    // =================================================
+    // CREATE DAILY SECTIONS
+    // =================================================
+
+    for (const date of dates) {
+
+        const dateObject =
+            new Date(
+                `${date}T00:00:00`
+            );
+
+
+        const day =
+            dateObject.getDate();
+
+
+        const monthName =
+            dateObject.toLocaleString(
+                "en-US",
+                {
+                    month: "long"
+                }
+            );
+
+
+        const year =
+            dateObject.getFullYear();
+
+
+        // =============================================
+        // DAILY TITLE
+        // =============================================
+
+        const titleRow =
+            reportSheet.addRow([
+
+                `SALES - ${day} ${monthName.toUpperCase()} ${year}`
+
+            ]);
+
+
+        titleRow.font = {
+
+            bold: true,
+
+            size: 14
+
+        };
+
+
+        // =============================================
+        // EMPTY ROW
+        // =============================================
+
+        reportSheet.addRow([]);
+
+
+        // =============================================
+        // COLUMN HEADERS
+        // =============================================
+
+        const headerRow =
+            reportSheet.addRow([
+
+                "DATE",
+
+                "ITEM NAME",
+
+                "UNIT PRICE",
+
+                "QUANTITY",
+
+                "SALE VALUE"
+
+            ]);
+
+
+        headerRow.font = {
+
+            bold: true
+
+        };
+
+
+        // =============================================
+        // DAILY TOTALS
+        // =============================================
+
+        let dailyQuantity = 0;
+
+        let dailyValue = 0;
+
+
+        // =============================================
+        // ITEMS
+        // =============================================
+
+        const items =
+            Object.keys(
+                dailySales[date]
+            );
+
+
+        for (const itemName of items) {
+
+            const data =
+                dailySales[date][itemName];
+
+
+            reportSheet.addRow([
+
+                date,
+
+                itemName,
+
+                data.price,
+
+                data.quantity,
+
+                data.saleValue
+
+            ]);
+
+
+            dailyQuantity +=
+                data.quantity;
+
+
+            dailyValue +=
+                data.saleValue;
+
+        }
+
+
+        // =============================================
+        // DAILY TOTAL
+        // =============================================
+
+        const totalRow =
+            reportSheet.addRow([
+
+                "",
+
+                "DAILY TOTAL",
+
+                "",
+
+                dailyQuantity,
+
+                dailyValue
+
+            ]);
+
+
+        totalRow.font = {
+
+            bold: true
+
+        };
+
+
+        // =============================================
+        // SPACE BETWEEN DAYS
+        // =============================================
+
+        reportSheet.addRow([]);
+
+        reportSheet.addRow([]);
+
+    }
+
+
+    // =================================================
+    // COLUMN WIDTHS
+    // =================================================
+
+    reportSheet.getColumn(1).width = 15;
+
+    reportSheet.getColumn(2).width = 35;
+
+    reportSheet.getColumn(3).width = 15;
+
+    reportSheet.getColumn(4).width = 12;
+
+    reportSheet.getColumn(5).width = 15;
+
+
+    console.log(
+        "DAILY_SALES_REPORT rebuilt successfully"
+    );
+
+}
+
+
+// =====================================================
+// SAVE SALE
+// =====================================================
+
+app.post(
+    "/save-sale",
+    async (req, res) => {
+
+        try {
+
+            const sale =
+                req.body;
+
+
+            console.log(
+                "Sale received:",
+                sale
+            );
+
+
+            // =================================================
+            // VALIDATION
+            // =================================================
+
+            if (
+                !sale.date ||
+                !sale.item ||
+                sale.price === undefined ||
+                !sale.quantity
+            ) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Please enter all sales details."
+
+                });
+
+            }
+
+
+            const quantity =
+                Number(
+                    sale.quantity
+                );
+
+
+            const price =
+                Number(
+                    sale.price
+                );
+
+
+            if (
+                isNaN(quantity) ||
+                quantity <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Invalid quantity."
+
+                });
+
+            }
+
+
+            if (
+                isNaN(price) ||
+                price <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Invalid price."
+
+                });
+
+            }
+
+
+            const month =
+                sale.date.substring(0, 7);
+
+
+            // =================================================
+            // OPEN WORKBOOK
+            // =================================================
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+
+            await workbook.xlsx.readFile(
+                filePath
+            );
+
+
+            let salesSheet =
+                workbook.getWorksheet(
+                    "SALES"
+                );
+
+
+            if (!salesSheet) {
+
+                salesSheet =
+                    workbook.addWorksheet(
+                        "SALES"
+                    );
+
+            }
+
+
+            // =================================================
+            // MAKE SURE SALES HEADER EXISTS
+            // =================================================
+
+            if (
+                salesSheet.rowCount === 0
+            ) {
+
+                salesSheet.addRow([
+
+                    "DATE",
+                    "MONTH",
+                    "ITEM NAME",
+                    "UNIT PRICE",
+                    "QUANTITY",
+                    "SALE VALUE"
+
+                ]);
+
+            }
+
+
+            // =================================================
+            // FIND SAME DATE + SAME ITEM
+            // =================================================
+
+            let existingRow = null;
+
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= salesSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    salesSheet.getRow(
+                        rowNumber
+                    );
+
+
+                const rowDate =
+                    getDate(
+                        row.getCell(1).value
+                    );
+
+
+                const rowItem =
+                    getText(
+                        row.getCell(3).value
+                    );
+
+
+                // Ignore invalid/empty rows
+
+                if (
+                    !rowDate ||
+                    !rowItem
+                ) {
+
+                    continue;
+
+                }
+
+
+                if (
+                    rowDate === sale.date &&
+                    rowItem === sale.item
+                ) {
+
+                    existingRow =
+                        row;
+
+                    break;
+
+                }
+
+            }
+
+            console.log("Looking for existing sale...");
+            console.log("Date from website:", sale.date);
+            console.log("Item from website:", sale.item);
+            console.log("Existing row:", existingRow);
+
+
+            // =================================================
+            // UPDATE EXISTING SALE
+            // =================================================
+
+            if (existingRow) {
+
+                const oldQuantity =
+                    Number(
+                        existingRow
+                            .getCell(5)
+                            .value || 0
+                    );
+
+
+                const newQuantity =
+                    oldQuantity +
+                    quantity;
+
+
+                const newSaleValue =
+                    newQuantity *
+                    price;
+
+
+                existingRow
+                    .getCell(5)
+                    .value =
+                    newQuantity;
+
+
+                existingRow
+                    .getCell(6)
+                    .value =
+                    newSaleValue;
+
+
+                console.log(
+                    "Existing sale updated."
+                );
+
+            }
+
+
+            // =================================================
+            // NEW SALE
+            // =================================================
+
+            else {
+
+                const saleValue =
+                    price *
+                    quantity;
+
+
+                salesSheet.addRow([
+
+                    sale.date,
+
+                    month,
+
+                    sale.item,
+
+                    price,
+
+                    quantity,
+
+                    saleValue
+
+                ]);
+
+
+                console.log(
+                    "New sale row created."
+                );
+
+            }
+
+
+            // =================================================
+            // REBUILD MONTHLY STOCK
+            // =================================================
+
+            await rebuildMonthlyStock(
+                workbook,
+                month
+            );
+
+            // =================================================
+            // REBUILD DAILY SALES REPORT
+            // =================================================
+
+            await rebuildDailySalesReport(
+                workbook
+            );
+
+
+            // =================================================
+            // SAVE EXCEL
+            // =================================================
+
+            await workbook.xlsx.writeFile(
+                filePath
+            );
+
+
+            console.log(
+                "Sales and Monthly Stock updated."
+            );
+
+
+            res.json({
+
+                success: true,
+
+                message:
+                    existingRow
+                        ? "Existing sale updated successfully!"
+                        : "Sale saved successfully!"
+
+            });
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "SAVE SALE ERROR:",
+                error
+            );
+
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Error saving sale: " +
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// SAVE SUPPLY
+// =====================================================
+
+app.post(
+    "/save-supply",
+    async (req, res) => {
+
+        try {
+
+            const supply =
+                req.body;
+
+
+            if (
+                !supply.date ||
+                !supply.item ||
+                !supply.quantity
+            ) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Please enter supply details."
+
+                });
+
+            }
+
+
+            const quantity =
+                Number(
+                    supply.quantity
+                );
+
+
+            if (
+                isNaN(quantity) ||
+                quantity <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Invalid supply quantity."
+
+                });
+
+            }
+
+
+            const month =
+                supply.date.substring(0, 7);
+
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+
+            await workbook.xlsx.readFile(
+                filePath
+            );
+
+
+            let sheet =
+                workbook.getWorksheet(
+                    "SUPPLY"
+                );
+
+
+            if (!sheet) {
+
+                sheet =
+                    workbook.addWorksheet(
+                        "SUPPLY"
+                    );
+
+            }
+
+
+            // Header
+
+            if (
+                sheet.rowCount === 0
+            ) {
+
+                sheet.addRow([
+
+                    "DATE",
+                    "MONTH",
+                    "ITEM NAME",
+                    "QUANTITY"
+
+                ]);
+
+            }
+
+
+            sheet.addRow([
+
+                supply.date,
+
+                month,
+
+                supply.item,
+
+                quantity
+
+            ]);
+
+
+            // =================================================
+            // UPDATE MONTHLY STOCK
+            // =================================================
+
+            await rebuildMonthlyStock(
+                workbook,
+                month
+            );
+
+
+            await workbook.xlsx.writeFile(
+                filePath
+            );
+
+
+            res.json({
+
+                success: true,
+
+                message:
+                    "Supply saved successfully!"
+
+            });
+
+        }
+
+        catch (error) {
+
+            console.error(
+                error
+            );
+
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Error saving supply: " +
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// GET MONTHLY STOCK
+// =====================================================
+
+app.get(
+    "/monthly-stock",
+    async (req, res) => {
+
+        try {
+
+            const month =
+                req.query.month;
+
+
+            if (!month) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Please provide month"
+
+                });
+
+            }
+
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+
+            await workbook.xlsx.readFile(
+                filePath
+            );
+
+
+            await rebuildMonthlyStock(
+                workbook,
+                month
+            );
+
+
+            await workbook.xlsx.writeFile(
+                filePath
+            );
+
+
+            const stockSheet =
+                workbook.getWorksheet(
+                    "MONTHLY_STOCK"
+                );
+
+
+            const result = [];
+
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= stockSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    stockSheet.getRow(
+                        rowNumber
+                    );
+
+
+                const rowMonth =
+                    getText(
+                        row.getCell(1).value
+                    );
+
+
+                if (
+                    rowMonth !== month
+                ) {
+
+                    continue;
+
+                }
+
+
+                result.push({
+
+                    itemName:
+                        getText(
+                            row.getCell(2).value
+                        ),
+
+                    unitPrice:
+                        Number(
+                            row.getCell(3).value || 0
+                        ),
+
+                    openingStock:
+                        Number(
+                            row.getCell(4).value || 0
+                        ),
+
+                    openingValue:
+                        Number(
+                            row.getCell(5).value || 0
+                        ),
+
+                    supply:
+                        Number(
+                            row.getCell(6).value || 0
+                        ),
+
+                    supplyValue:
+                        Number(
+                            row.getCell(7).value || 0
+                        ),
+
+                    totalStock:
+                        Number(
+                            row.getCell(8).value || 0
+                        ),
+
+                    totalValue:
+                        Number(
+                            row.getCell(9).value || 0
+                        ),
+
+                    salesQuantity:
+                        Number(
+                            row.getCell(10).value || 0
+                        ),
+
+                    saleValue:
+                        Number(
+                            row.getCell(11).value || 0
+                        ),
+
+                    closingStock:
+                        Number(
+                            row.getCell(12).value || 0
+                        ),
+
+                    closingValue:
+                        Number(
+                            row.getCell(13).value || 0
+                        )
+
+                });
+
+            }
+
+
+            res.json(result);
+
+        }
+
+        catch (error) {
+
+            console.error(
+                error
+            );
+
+
+            res.status(500).json({
+
+                message:
+                    "Error calculating monthly stock"
+
+            });
+
+        }
+
+    }
+);
+
+
+
+
+
+// =====================================================
+// REBUILD ALL REPORTS
+// =====================================================
+
+async function rebuildAllReports() {
+
+    const workbook = new ExcelJS.Workbook();
+
+    await workbook.xlsx.readFile(filePath);
+
+    // Get SALES sheet
+    const salesSheet = workbook.getWorksheet("SALES");
+
+    if (!salesSheet) {
+        console.log("SALES sheet not found.");
+        return;
+    }
+
+    // Find all months from SALES data
+    const months = new Set();
+
+    for (
+        let rowNumber = 2;
+        rowNumber <= salesSheet.rowCount;
+        rowNumber++
+    ) {
+
+        const row = salesSheet.getRow(rowNumber);
+
+        const date = getDate(
+            row.getCell(1).value
+        );
+
+        if (date) {
+            months.add(
+                date.substring(0, 7)
+            );
+        }
+    }
+
+    // Rebuild Monthly Stock for every month
+    for (const month of months) {
+
+        await rebuildMonthlyStock(
+            workbook,
+            month
+        );
+
+    }
+
+    // Rebuild Daily Sales Report
+    await rebuildDailySalesReport(
+        workbook
+    );
+
+    // Save Excel
+    await workbook.xlsx.writeFile(
+        filePath
+    );
+
+    console.log(
+        "All reports rebuilt successfully."
+    );
+}
+
+rebuildAllReports();
+
+
+// =====================================================
+// DASHBOARD SUMMARY
+// =====================================================
+
+app.get("/dashboard-summary", async (req, res) => {
+
+    try {
+
+        const workbook = new ExcelJS.Workbook();
+
+        await workbook.xlsx.readFile(filePath);
+
+
+        const itemSheet =
+            workbook.getWorksheet("ITEM_MASTER");
+
+        const salesSheet =
+            workbook.getWorksheet("SALES");
+
+        const stockSheet =
+            workbook.getWorksheet("MONTHLY_STOCK");
+
+
+        // =============================================
+        // TOTAL ITEMS
+        // =============================================
+
+        let totalItems = 0;
+
+        if (itemSheet) {
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= itemSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const itemName =
+                    getText(
+                        itemSheet
+                            .getRow(rowNumber)
+                            .getCell(1)
+                            .value
+                    );
+
+                if (itemName) {
+
+                    totalItems++;
+
+                }
+
+            }
+
+        }
+
+
+        // =============================================
+        // TODAY
+        // =============================================
+
+        const today = new Date();
+
+        const todayString =
+            today.getFullYear() +
+            "-" +
+            String(today.getMonth() + 1).padStart(2, "0") +
+            "-" +
+            String(today.getDate()).padStart(2, "0");
+
+
+        // =============================================
+        // TODAY'S SALES
+        // =============================================
+
+        let todaySales = 0;
+
+        if (salesSheet) {
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= salesSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    salesSheet.getRow(rowNumber);
+
+
+                const saleDate =
+                    getDate(
+                        row.getCell(1).value
+                    );
+
+
+                const saleValue =
+                    Number(
+                        row.getCell(6).value || 0
+                    );
+
+
+                if (
+                    saleDate === todayString
+                ) {
+
+                    todaySales += saleValue;
+
+                }
+
+            }
+
+        }
+
+
+        // =============================================
+        // CURRENT MONTH
+        // =============================================
+
+        const currentMonth =
+            todayString.substring(0, 7);
+
+
+        // =============================================
+        // TOTAL STOCK
+        // =============================================
+
+        let totalStock = 0;
+
+        let lowStock = 0;
+
+
+        if (stockSheet) {
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= stockSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    stockSheet.getRow(rowNumber);
+
+
+                const rowMonth =
+                    getText(
+                        row.getCell(1).value
+                    );
+
+
+                if (
+                    rowMonth !== currentMonth
+                ) {
+
+                    continue;
+
+                }
+
+
+                const closingStock =
+                    Number(
+                        row.getCell(12).value || 0
+                    );
+
+
+                totalStock +=
+                    closingStock;
+
+
+                if (
+                    closingStock <= 10
+                ) {
+
+                    lowStock++;
+
+                }
+
+            }
+
+        }
+
+
+        // =============================================
+        // SEND DATA
+        // =============================================
+
+        res.json({
+
+            totalItems:
+                totalItems,
+
+            todaySales:
+                todaySales,
+
+            totalStock:
+                totalStock,
+
+            lowStock:
+                lowStock
+
+        });
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "DASHBOARD ERROR:",
+            error
+        );
+
+
+        res.status(500).json({
+
+            message:
+                "Unable to load dashboard",
+
+            error:
+                error.message
+
+        });
+
+    }
+
+});
+
+
+// =====================================================
+// DASHBOARD INVENTORY
+// =====================================================
+
+app.get("/dashboard-inventory", async (req, res) => {
+
+    try {
+
+        const workbook = new ExcelJS.Workbook();
+
+        await workbook.xlsx.readFile(filePath);
+
+
+        const stockSheet =
+            workbook.getWorksheet("MONTHLY_STOCK");
+
+
+        if (!stockSheet) {
+
+            return res.json([]);
+
+        }
+
+
+        const today = new Date();
+
+        const currentMonth =
+            today.getFullYear() +
+            "-" +
+            String(today.getMonth() + 1).padStart(2, "0");
+
+
+        const inventory = [];
+
+
+        for (
+            let rowNumber = 2;
+            rowNumber <= stockSheet.rowCount;
+            rowNumber++
+        ) {
+
+            const row =
+                stockSheet.getRow(rowNumber);
+
+
+            const month =
+                getText(
+                    row.getCell(1).value
+                );
+
+
+            if (
+                month !== currentMonth
+            ) {
+
+                continue;
+
+            }
+
+
+            const itemName =
+                getText(
+                    row.getCell(2).value
+                );
+
+
+            const closingStock =
+                Number(
+                    row.getCell(12).value || 0
+                );
+
+
+            if (!itemName) {
+
+                continue;
+
+            }
+
+
+            let status = "In Stock";
+
+
+            if (closingStock <= 0) {
+
+                status = "Out of Stock";
+
+            }
+
+            else if (closingStock <= 10) {
+
+                status = "Low Stock";
+
+            }
+
+
+            inventory.push({
+
+                sno:
+                   inventory.length + 1,
+
+                itemName:
+                    itemName,
+
+                stock:
+                    closingStock,
+
+                status:
+                    status
+
+            });
+
+        }
+
+
+        res.json(inventory);
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "DASHBOARD INVENTORY ERROR:",
+            error
+        );
+
+
+        res.status(500).json({
+
+            message:
+                "Unable to load inventory"
+
+        });
+
+    }
+
+});
+
+
+
+// =====================================================
+// GET DAILY SALES REPORT
+// =====================================================
+
+app.get("/daily-sales-report", async (req, res) => {
+
+    try {
+
+        const workbook = new ExcelJS.Workbook();
+
+        await workbook.xlsx.readFile(filePath);
+
+        const sheet =
+            workbook.getWorksheet("DAILY_SALES_REPORT");
+
+        if (!sheet) {
+
+            return res.json([]);
+
+        }
+
+        const report = [];
+
+        for (
+            let rowNumber = 1;
+            rowNumber <= sheet.rowCount;
+            rowNumber++
+        ) {
+
+            const row =
+                sheet.getRow(rowNumber);
+
+            const values = [];
+
+            for (
+                let columnNumber = 1;
+                columnNumber <= 5;
+                columnNumber++
+            ) {
+
+                values.push(
+                    getText(
+                        row.getCell(columnNumber).value
+                    )
+                );
+
+            }
+
+            // Ignore completely empty rows
+
+            if (
+                values.every(value => value === "")
+            ) {
+
+                continue;
+
+            }
+
+            report.push(values);
+
+        }
+
+        res.json(report);
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "DAILY SALES REPORT ERROR:",
+            error
+        );
+
+        res.status(500).json({
+
+            message:
+                "Unable to load daily sales report"
+
+        });
+
+    }
+
+});
+
+
+// =====================================================
+// START SERVER
+// =====================================================
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(
+    PORT,
+    () => {
+
+        console.log(
+            `Server running on port ${PORT}`
+        );
+
+    }
+);

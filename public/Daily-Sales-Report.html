@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Daily Sales Report</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+    <!-- ========================================= -->
+    <!-- SIDEBAR -->
+    <!-- ========================================= -->
+
+    <aside class="sidebar">
+
+
+        <!-- LOGO -->
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                📦
+            </div>
+
+            <div>
+
+                <div class="logo-name">
+                    DailyStock
+                </div>
+
+                <div class="logo-subtitle">
+                    Inventory Management
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- NAVIGATION -->
+
+        <nav class="navigation">
+
+
+            <!-- DASHBOARD -->
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='index.html'"
+            >
+
+                <span>⌂</span>
+
+                <span>
+                    Dashboard
+                </span>
+
+            </button>
+
+
+            <!-- SALES -->
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='sales.html'"
+            >
+
+                <span>🛒</span>
+
+                <span>
+                    Sales
+                </span>
+
+            </button>
+
+
+            <!-- DAILY SALES REPORT -->
+
+            <button
+                class="nav-button active"
+            >
+                <span>📋</span>
+
+                <span>
+                    Daily Sales Report
+                </span>
+
+            </button>
+
+
+            <!-- PURCHASES -->
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='purchases.html'"
+            >
+
+                <span>📦</span>
+
+                <span>
+                    Purchases
+                </span>
+
+            </button>
+
+
+            <!-- REPORTS -->
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='reports.html'"
+            >
+
+                <span>📊</span>
+
+                <span>
+                    Reports
+                </span>
+
+            </button>
+
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+            <button class="nav-button">
+
+                <span>⚙</span>
+
+                <span>
+                    Settings
+                </span>
+
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ========================================= -->
+    <!-- MAIN CONTENT -->
+    <!-- ========================================= -->
+
+    <main class="main-content">
+
+
+        <!-- HEADER -->
+
+        <header class="top-header">
+
+            <div>
+
+                <h1>
+                    Daily Sales & Inventory
+                </h1>
+
+                <p>
+                    Manage your sales, purchases and stock
+                </p>
+
+            </div>
+
+
+            <div class="header-date">
+
+                <span id="currentDate">
+                    Today
+                </span>
+
+            </div>
+
+        </header>
+
+
+        <!-- ===================================== -->
+        <!-- DAILY SALES REPORT -->
+        <!-- ===================================== -->
+
+        <section class="page-section">
+
+
+            <div class="page-title">
+
+                <div>
+
+                    <h2>
+                        Daily Sales Report
+                    </h2>
+
+                    <p>
+                        View your daily sales
+                    </p>
+
+                </div>
+
+
+                <button
+                    class="primary-button"
+                    onclick="loadDailySalesReport()"
+                >
+                    🔄 Refresh Report
+                </button>
+
+            </div>
+
+
+            <!-- REPORT -->
+
+            <div class="content-card">
+
+
+                <div class="section-header">
+
+                    <div>
+
+                        <h3>
+                            Daily Sales
+                        </h3>
+
+                        <p>
+                            Sales recorded by date
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="dailySalesReportContainer"
+                    class="table-container"
+                >
+
+                    <p>
+                        Loading daily sales report...
+                    </p>
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+    </main>
+
+</div>
+
+
+<!-- ========================================= -->
+<!-- EXISTING SCRIPT.JS -->
+<!-- ========================================= -->
+
+<script src="script.js"></script>
+
+
+</body>
+
+</html>

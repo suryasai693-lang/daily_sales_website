@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Reports - DailyStock</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="app">
+
+
+    <!-- ========================================= -->
+    <!-- SIDEBAR -->
+    <!-- ========================================= -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                📦
+            </div>
+
+            <div>
+
+                <div class="logo-name">
+                    DailyStock
+                </div>
+
+                <div class="logo-subtitle">
+                    Inventory Management
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <nav class="navigation">
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='index.html'"
+            >
+
+                <span>⌂</span>
+
+                <span>Dashboard</span>
+
+            </button>
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='sales.html'"
+            >
+
+                <span>🛒</span>
+
+                <span>Sales</span>
+
+            </button>
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='daily-sales-report.html'"
+            >
+                <span>📋</span>
+                <span>Daily Sales Report</span>
+            </button>
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='purchases.html'"
+            >
+
+                <span>📦</span>
+
+                <span>Purchases</span>
+
+            </button>
+
+
+            <button
+                class="nav-button active"
+            >
+
+                <span>📊</span>
+
+                <span>Reports</span>
+
+            </button>
+
+
+        </nav>
+
+    </aside>
+
+
+    <!-- ========================================= -->
+    <!-- MAIN CONTENT -->
+    <!-- ========================================= -->
+
+    <main class="main-content">
+
+
+        <header class="top-header">
+
+            <div>
+
+                <h1>
+                    Reports
+                </h1>
+
+                <p>
+                    View sales and inventory reports
+                </p>
+
+            </div>
+
+        </header>
+
+
+        <!-- ===================================== -->
+        <!-- REPORT TITLE -->
+        <!-- ===================================== -->
+
+        <div class="page-title">
+
+            <div>
+
+                <h2>
+                    Monthly Stock Report
+                </h2>
+
+                <p>
+                    View your monthly inventory summary
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <!-- ===================================== -->
+        <!-- REPORT CONTROLS -->
+        <!-- ===================================== -->
+
+        <div class="report-controls">
+
+
+            <div class="form-group">
+
+                <label>
+                    Select Month
+                </label>
+
+                <input
+                    type="month"
+                    id="reportMonth"
+                >
+
+            </div>
+
+
+            <button
+                class="primary-button report-button"
+                onclick="generateReport()"
+            >
+
+                📊 Generate Report
+
+            </button>
+
+            <button
+                class="secondary-button"
+                onclick="downloadReportPDF()"
+            >
+                📄 Download PDF
+            </button>
+
+
+        </div>
+
+
+        <!-- ===================================== -->
+        <!-- MONTHLY REPORT -->
+        <!-- ===================================== -->
+
+        <div
+            id="monthlyReport"
+            class="report-container"
+        ></div>
+
+
+        <!-- ===================================== -->
+        <!-- MESSAGE -->
+        <!-- ===================================== -->
+
+        <div id="message"></div>
+
+
+    </main>
+
+</div>
+
+<script src="jspdf.umd.min.js"></script>
+<script src="jspdf.plugin.autotable.min.js"></script>
+
+
+<script src="script.js"></script>
+
+</body>
+
+</html>
+

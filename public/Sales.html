@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Sales - DailyStock</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- SIDEBAR -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                📦
+            </div>
+
+            <div>
+
+                <div class="logo-name">
+                    DailyStock
+                </div>
+
+                <div class="logo-subtitle">
+                    Inventory Management
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <nav class="navigation">
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='index.html'"
+            >
+                <span>⌂</span>
+                <span>Dashboard</span>
+            </button>
+
+
+            <button
+                class="nav-button active"
+            >
+                <span>🛒</span>
+                <span>Sales</span>
+            </button>
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='daily-sales-report.html'"
+            >
+                <span>📋</span>
+                <span>Daily Sales Report</span>
+            </button>
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='purchases.html'"
+            >
+                <span>📦</span>
+                <span>Purchases</span>
+            </button>
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='reports.html'"
+            >
+                <span>📊</span>
+                <span>Reports</span>
+            </button>
+
+        </nav>
+
+    </aside>
+
+
+    <!-- MAIN CONTENT -->
+
+    <main class="main-content">
+
+        <header class="top-header">
+
+            <div>
+
+                <h1>
+                    Sales
+                </h1>
+
+                <p>
+                    Record and manage your daily sales
+                </p>
+
+            </div>
+
+        </header>
+
+
+        <div class="page-title">
+
+            <div>
+
+                <h2>
+                    New Sale
+                </h2>
+
+                <p>
+                    Enter the sales details below
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <!-- SALES FORM -->
+
+        <div
+            id="salesForm"
+            class="form-card"
+        >
+
+            <div class="form-grid">
+
+
+                <div class="form-group">
+
+                    <label>
+                        Date
+                    </label>
+
+                    <input
+                        type="date"
+                        id="salesDate"
+                    >
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Item
+                    </label>
+
+                    <select id="salesItem">
+
+                        <option value="">
+                            Select Item
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Unit Price
+                    </label>
+
+                    <input
+                        type="number"
+                        id="salesPrice"
+                        readonly
+                    >
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Available Stock
+                    </label>
+
+                    <input
+                        type="number"
+                        id="availableStock"
+                        readonly
+                    >
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Sales Quantity
+                    </label>
+
+                    <input
+                        type="number"
+                        id="salesQuantity"
+                        min="1"
+                    >
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Sale Value
+                    </label>
+
+                    <input
+                        type="number"
+                        id="saleValue"
+                        readonly
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="form-actions">
+
+                <button
+                    class="primary-button"
+                    onclick="saveSale()"
+                >
+                    💾 Save Sale
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <div id="message"></div>
+
+    </main>
+
+</div>
+
+
+<script src="script.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Daily Stock System</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- ========================================= -->
+    <!-- SIDEBAR -->
+    <!-- ========================================= -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                📦
+            </div>
+
+            <div>
+                <div class="logo-name">
+                    DailyStock
+                </div>
+
+                <div class="logo-subtitle">
+                    Inventory Management
+                </div>
+            </div>
+
+        </div>
+
+
+        <nav class="navigation">
+
+            <button
+                class="nav-button active"
+                onclick="showDashboard()"
+            >
+                <span>⌂</span>
+                <span>Dashboard</span>
+            </button>
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='sales.html'"
+            >
+                <span>🛒</span>
+                <span>Sales</span>
+            </button>
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='daily-sales-report.html'"
+            >
+                <span>📋</span>
+                <span>Daily Sales Report</span>
+            </button>
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='purchases.html'"
+            >
+                <span>📦</span>
+                <span>Purchases</span>
+            </button>
+
+
+            <button
+                class="nav-button"
+                onclick="window.location.href='reports.html'"
+            >
+                <span>📊</span>
+                <span>Reports</span>
+            </button>
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+            <button class="nav-button">
+                <span>⚙</span>
+                <span>Settings</span>
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ========================================= -->
+    <!-- MAIN CONTENT -->
+    <!-- ========================================= -->
+
+    <main class="main-content">
+
+
+        <!-- ===================================== -->
+        <!-- TOP HEADER -->
+        <!-- ===================================== -->
+
+        <header class="top-header">
+
+            <div>
+
+                <h1>
+                    Daily Sales & Inventory
+                </h1>
+
+                <p>
+                    Manage your sales, purchases and stock
+                </p>
+
+            </div>
+
+
+            <div class="header-date">
+
+                <span id="currentDate">
+                    Today
+                </span>
+
+            </div>
+
+        </header>
+
+
+        <!-- ===================================== -->
+        <!-- DASHBOARD -->
+        <!-- ===================================== -->
+
+        <section
+            id="dashboard"
+            class="page-section"
+        >
+
+            <div class="page-title">
+
+                <div>
+
+                    <h2>
+                        Stock Overview
+                    </h2>
+
+                    <p>
+                        Quick overview of your inventory
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- ================================= -->
+            <!-- SUMMARY CARDS -->
+            <!-- ================================= -->
+
+            <div class="summary-grid">
+
+
+                <div class="summary-card blue">
+
+                    <div class="card-icon">
+                        📦
+                    </div>
+
+                    <div class="card-title">
+                        Total Items
+                    </div>
+
+                    <div
+                        class="card-value"
+                        id="dashboardTotalItems"
+                    >
+                        -
+                    </div>
+
+                    <div class="card-description">
+                        Items in inventory
+                    </div>
+
+                </div>
+
+
+                <div class="summary-card orange">
+
+                    <div class="card-icon">
+                        🛒
+                    </div>
+
+                    <div class="card-title">
+                        Today's Sales
+                    </div>
+
+                    <div
+                        class="card-value"
+                        id="dashboardSales"
+                    >
+                        -
+                    </div>
+
+                    <div class="card-description">
+                        Sales value today
+                    </div>
+
+                </div>
+
+
+                <div class="summary-card green">
+
+                    <div class="card-icon">
+                        📈
+                    </div>
+
+                    <div class="card-title">
+                        Stock Available
+                    </div>
+
+                    <div
+                        class="card-value"
+                        id="dashboardStock"
+                    >
+                        -
+                    </div>
+
+                    <div class="card-description">
+                        Current stock quantity
+                    </div>
+
+                </div>
+
+
+                <div class="summary-card red">
+
+                    <div class="card-icon">
+                        ⚠
+                    </div>
+
+                    <div class="card-title">
+                        Low Stock
+                    </div>
+
+                    <div
+                        class="card-value"
+                        id="dashboardLowStock"
+                    >
+                        -
+                    </div>
+
+                    <div class="card-description">
+                        Items need attention
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ================================= -->
+            <!-- INVENTORY STATUS -->
+            <!-- ================================= -->
+
+            <div class="content-card">
+
+                <div class="section-header">
+
+                    <div>
+
+                        <h3>
+                            Inventory Status
+                        </h3>
+
+                        <p>
+                            Current stock overview
+                        </p>
+
+                    </div>
+
+
+                    <button
+                        class="secondary-button"
+                        onclick="window.location.href='reports.html'"
+                    >
+                        View Reports
+                    </button>
+
+                </div>
+
+
+                <div class="table-container">
+
+                    <table>
+
+                        <thead>
+
+                            <tr>
+
+                                <th>
+                                  S.No
+                                </th>
+
+                                <th>
+                                    Item
+                                </th>
+
+                                <th>
+                                    Stock
+                                </th>
+
+                                <th>
+                                    Status
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody id="dashboardInventory">
+
+                            <tr>
+
+                                <td colspan="4">
+
+                                    No inventory data available
+
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ===================================== -->
+        <!-- SALES -->
+        <!-- ===================================== -->
+
+        <section
+            id="salesForm"
+            class="page-section hidden"
+        >
+
+            <div class="page-title">
+
+                <div>
+
+                    <h2>
+                        Sales Entry
+                    </h2>
+
+                    <p>
+                        Record your daily sales
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="form-card">
+
+                <div class="form-grid">
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Date
+                        </label>
+
+                        <input
+                            type="date"
+                            id="salesDate"
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Item
+                        </label>
+
+                        <select id="salesItem">
+
+                            <option value="">
+                                Select Item
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Unit Price
+                        </label>
+
+                        <input
+                            type="number"
+                            id="salesPrice"
+                            readonly
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Available Stock
+                        </label>
+
+                        <input
+                            type="number"
+                            id="availableStock"
+                            readonly
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Sales Quantity
+                        </label>
+
+                        <input
+                            type="number"
+                            id="salesQuantity"
+                            min="1"
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Sale Value
+                        </label>
+
+                        <input
+                            type="number"
+                            id="saleValue"
+                            readonly
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-actions">
+
+                    <button
+                        class="primary-button"
+                        onclick="saveSale()"
+                    >
+                        💾 Save Sale
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ===================================== -->
+        <!-- SUPPLY / PURCHASE -->
+        <!-- ===================================== -->
+
+        <section
+            id="supplyForm"
+            class="page-section hidden"
+        >
+
+            <div class="page-title">
+
+                <div>
+
+                    <h2>
+                        Purchases
+                    </h2>
+
+                    <p>
+                        Record incoming stock
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="form-card">
+
+                <div class="form-grid">
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Date
+                        </label>
+
+                        <input
+                            type="date"
+                            id="supplyDate"
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Item
+                        </label>
+
+                        <select id="supplyItem">
+
+                            <option value="">
+                                Select Item
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Purchase Quantity
+                        </label>
+
+                        <input
+                            type="number"
+                            id="supplyQuantity"
+                            min="1"
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-actions">
+
+                    <button
+                        class="primary-button"
+                        onclick="saveSupply()"
+                    >
+                        💾 Save Purchase
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ===================================== -->
+        <!-- MONTHLY REPORT -->
+        <!-- ===================================== -->
+
+        <section
+            id="monthlyForm"
+            class="page-section hidden"
+        >
+
+            <div class="page-title">
+
+                <div>
+
+                    <h2>
+                        Reports
+                    </h2>
+
+                    <p>
+                        View your monthly inventory report
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="report-controls">
+
+                <div class="form-group">
+
+                    <label>
+                        Select Month
+                    </label>
+
+                    <input
+                        type="month"
+                        id="reportMonth"
+                    >
+
+                </div>
+
+
+                <button
+                    class="primary-button report-button"
+                    onclick="generateReport()"
+                >
+                    📊 Generate Report
+                </button>
+
+            </div>
+
+
+            <div
+                id="monthlyReport"
+                class="report-container"
+            ></div>
+
+        </section>
+
+        
+
+
+        <!-- ===================================== -->
+        <!-- MESSAGE -->
+        <!-- ===================================== -->
+
+        <div id="message"></div>
+
+
+    </main>
+
+</div>
+
+
+<script src="script.js"></script>
+
+<script>
+
+    // Show dashboard initially
+
+    function showDashboard() {
+
+        document
+            .getElementById("dashboard")
+            .classList.remove("hidden");
+
+
+        document
+            .getElementById("salesForm")
+            .classList.add("hidden");
+
+
+        document
+            .getElementById("supplyForm")
+            .classList.add("hidden");
+
+
+        document
+            .getElementById("monthlyForm")
+            .classList.add("hidden");
+
+
+        updateNavigation("Dashboard");
+
+    }
+
+
+    // Update sidebar active button
+
+    function updateNavigation(name) {
+
+        document
+            .querySelectorAll(".nav-button")
+            .forEach(button => {
+
+                button.classList.remove("active");
+
+                if (
+                    button.innerText
+                        .toLowerCase()
+                        .includes(name.toLowerCase())
+                ) {
+
+                    button.classList.add("active");
+
+                }
+
+            });
+
+    }
+
+
+    // Display current date
+
+    const today =
+        new Date();
+
+
+    document.getElementById(
+        "currentDate"
+    ).textContent =
+        today.toLocaleDateString(
+            "en-IN",
+            {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+            }
+        );
+
+// =====================================================
+// LOAD DASHBOARD DATA
+// =====================================================
+
+async function loadDashboard() {
+
+    try {
+
+        const response =
+            await fetch("/dashboard-summary");
+
+        const data =
+            await response.json();
+
+
+        // Total Items
+
+        document.getElementById(
+            "dashboardTotalItems"
+        ).textContent =
+            data.totalItems;
+
+
+        // Today's Sales
+
+        document.getElementById(
+            "dashboardSales"
+        ).textContent =
+            "₹" + data.todaySales.toLocaleString("en-IN");
+
+
+        // Total Stock
+
+        document.getElementById(
+            "dashboardStock"
+        ).textContent =
+            data.totalStock.toLocaleString("en-IN");
+
+
+        // Low Stock
+
+        document.getElementById(
+            "dashboardLowStock"
+        ).textContent =
+            data.lowStock;
+
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Dashboard loading error:",
+            error
+        );
+
+    }
+
+}
+
+
+// Load dashboard data
+
+loadDashboard();
+
+        
+    // Start on Dashboard
+
+    showDashboard();
+
+</script>
+
+
+</body>
+
+</html>
