@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Item - DailyStock</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+<div class="app">
+
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon">📦</div>
+            <div>
+                <div class="logo-name">DailyStock</div>
+                <div class="logo-subtitle">Inventory Management</div>
+            </div>
+        </div>
+
+        <nav class="navigation">
+            <button class="nav-button" onclick="window.location.href='index.html'">
+                <span>⌂</span>
+                <span>Dashboard</span>
+            </button>
+            <button class="nav-button" onclick="window.location.href='sales.html'">
+                <span>🛒</span>
+                <span>Sales</span>
+            </button>
+            <button class="nav-button" onclick="window.location.href='daily-sales-report.html'">
+                <span>📋</span>
+                <span>Daily Sales Report</span>
+            </button>
+            <button class="nav-button" onclick="window.location.href='purchases.html'">
+                <span>📦</span>
+                <span>Purchases</span>
+            </button>
+            <button class="nav-button" onclick="window.location.href='reports.html'">
+                <span>📊</span>
+                <span>Reports</span>
+            </button>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-header">
+            <div>
+                <h1>Add New Item</h1>
+                <p>Add a new item to your inventory</p>
+            </div>
+        </header>
+
+        <div class="form-card">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="newItemName">Item Name</label>
+                    <input type="text" id="newItemName" placeholder="Enter item name">
+                </div>
+
+                <div class="form-group">
+                    <label for="newItemPrice">Unit Price</label>
+                    <input type="number" id="newItemPrice" min="0" placeholder="Enter unit price">
+                </div>
+
+                <div class="form-group">
+                    <label for="newItemStock">Opening / Available Quantity</label>
+                    <input type="number" id="newItemStock" min="0" placeholder="Enter quantity">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="primary-button" type="button" onclick="addItem()">💾 Add Item</button>
+                <button class="secondary-button" type="button" onclick="window.location.href='index.html'">Cancel</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    async function addItem() {
+        const itemName = document.getElementById("newItemName").value.trim();
+        const unitPrice = Number(document.getElementById("newItemPrice").value);
+        const openingStock = Number(document.getElementById("newItemStock").value);
+
+        if (!itemName || unitPrice <= 0 || openingStock < 0) {
+            alert("Please enter a valid item name, unit price, and opening stock.");
+            return;
+        }
+
+        const response = await fetch("/add-item", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ itemName, unitPrice, openingStock })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.message || "Unable to add item.");
+            return;
+        }
+
+        alert(result.message || "Item added successfully.");
+        window.location.href = "index.html";
+    }
+</script>
+</body>
+</html>

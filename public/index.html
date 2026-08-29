@@ -278,27 +278,42 @@
 
                 <div class="section-header">
 
-                    <div>
+<div>
 
-                        <h3>
-                            Inventory Status
-                        </h3>
+    <h3>
+        Inventory Status
+    </h3>
 
-                        <p>
-                            Current stock overview
-                        </p>
+    <p>
+        Current stock overview
+    </p>
 
-                    </div>
+</div>
 
 
-                    <button
-                        class="secondary-button"
-                        onclick="window.location.href='reports.html'"
-                    >
-                        View Reports
-                    </button>
+<div>
 
-                </div>
+    <button
+    type="button"
+    class="primary-button"
+    id="addNewItemButton"
+    onclick="window.location.href='add-item.html'"
+>
+    ➕ Add New Item
+</button>
+
+    <button
+        class="secondary-button"
+        onclick="window.location.href='reports.html'"
+    >
+        View Reports
+    </button>
+
+</div>
+
+
+</div>
+
 
 
                 <div class="table-container">
@@ -647,9 +662,6 @@
 
         </section>
 
-        
-
-
         <!-- ===================================== -->
         <!-- MESSAGE -->
         <!-- ===================================== -->
@@ -807,6 +819,15 @@ loadDashboard();
     // Start on Dashboard
 
     showDashboard();
+
+
+
+
+// =====================================================
+// SAVE NEW ITEM
+// =====================================================
+
+
 
 </script>
 

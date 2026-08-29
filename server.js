@@ -1,40 +1,305 @@
+require("dotenv").config();
+
 const express = require("express");
 const ExcelJS = require("exceljs");
 const path = require("path");
 const fs = require("fs");
 
+// =====================================================
+// GITHUB CONFIGURATION
+// =====================================================
+
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
+const GITHUB_REPO =
+    "suryasai693-lang/daily_sales";
+
+const GITHUB_FILE_PATH =
+    "data/sales.xlsx";
+
+const GITHUB_BRANCH =
+    "main";
+
+
+// =====================================================
+// EXPRESS APP
+// =====================================================
+
 const app = express();
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+
+app.use(express.static("public"));
 
 
 // =====================================================
-// EXCEL FILE PATH
+// LOCAL EXCEL FILE PATH
 // =====================================================
 
-const filePath = path.join(
-    __dirname,
-    "data",
-    "sales.xlsx"
-);
+const filePath =
+    path.join(
+        __dirname,
+        "data",
+        "sales.xlsx"
+    );
 
 
 // =====================================================
-// CHECK FILE
+// DOWNLOAD SALES.XLSX FROM GITHUB
 // =====================================================
 
-if (!fs.existsSync(filePath)) {
+async function downloadExcelFromGitHub() {
 
-    console.log("sales.xlsx not found!");
+    if (!GITHUB_TOKEN) {
 
-    process.exit();
+        throw new Error(
+            "GITHUB_TOKEN is not configured."
+        );
+
+    }
+
+
+    const url =
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
+
+
+    const response =
+        await fetch(
+            url,
+            {
+
+                headers: {
+
+                    "Authorization":
+                        `Bearer ${GITHUB_TOKEN}`,
+
+                    "Accept":
+                        "application/vnd.github+json",
+
+                    "X-GitHub-Api-Version":
+                        "2022-11-28"
+
+                }
+
+            }
+        );
+
+
+    if (!response.ok) {
+
+        const errorText =
+            await response.text();
+
+        throw new Error(
+            `GitHub download failed: ${response.status} ${errorText}`
+        );
+
+    }
+
+
+    const data =
+        await response.json();
+
+
+    if (!data.content) {
+
+        throw new Error(
+            "GitHub file content is empty."
+        );
+
+    }
+
+
+    const fileBuffer =
+        Buffer.from(
+            data.content.replace(/\n/g, ""),
+            "base64"
+        );
+
+
+    // Make sure local data folder exists
+
+    const dataFolder =
+        path.dirname(filePath);
+
+
+    if (!fs.existsSync(dataFolder)) {
+
+        fs.mkdirSync(
+            dataFolder,
+            {
+                recursive: true
+            }
+        );
+
+    }
+
+
+    fs.writeFileSync(
+        filePath,
+        fileBuffer
+    );
+
+
+    console.log(
+        "Latest sales.xlsx downloaded from GitHub."
+    );
+
+
+    return fileBuffer;
 
 }
 
 
 // =====================================================
-// HELPER FUNCTIONS
+// UPLOAD EXCEL BUFFER TO GITHUB
+// =====================================================
+
+async function uploadExcelToGitHub(
+    fileBuffer
+) {
+
+    if (!GITHUB_TOKEN) {
+
+        throw new Error(
+            "GITHUB_TOKEN is not configured."
+        );
+
+    }
+
+
+    if (!fileBuffer) {
+
+        throw new Error(
+            "Excel file buffer is empty."
+        );
+
+    }
+
+
+    const content =
+        fileBuffer.toString("base64");
+
+
+    // =================================================
+    // GET CURRENT FILE SHA
+    // =================================================
+
+    const getUrl =
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
+
+
+    const getResponse =
+        await fetch(
+            getUrl,
+            {
+
+                headers: {
+
+                    "Authorization":
+                        `Bearer ${GITHUB_TOKEN}`,
+
+                    "Accept":
+                        "application/vnd.github+json",
+
+                    "X-GitHub-Api-Version":
+                        "2022-11-28"
+
+                }
+
+            }
+        );
+
+
+    if (!getResponse.ok) {
+
+        const errorText =
+            await getResponse.text();
+
+        throw new Error(
+            `Unable to get GitHub file information: ${getResponse.status} ${errorText}`
+        );
+
+    }
+
+
+    const fileData =
+        await getResponse.json();
+
+
+    // =================================================
+    // UPDATE FILE
+    // =================================================
+
+    const updateUrl =
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
+
+
+    const updateResponse =
+        await fetch(
+            updateUrl,
+            {
+
+                method: "PUT",
+
+                headers: {
+
+                    "Authorization":
+                        `Bearer ${GITHUB_TOKEN}`,
+
+                    "Accept":
+                        "application/vnd.github+json",
+
+                    "Content-Type":
+                        "application/json",
+
+                    "X-GitHub-Api-Version":
+                        "2022-11-28"
+
+                },
+
+                body:
+                    JSON.stringify({
+
+                        message:
+                            "Update sales.xlsx from DailyStock",
+
+                        content:
+                            content,
+
+                        sha:
+                            fileData.sha,
+
+                        branch:
+                            GITHUB_BRANCH
+
+                    })
+
+            }
+        );
+
+
+    if (!updateResponse.ok) {
+
+        const errorText =
+            await updateResponse.text();
+
+        throw new Error(
+            `GitHub upload failed: ${updateResponse.status} ${errorText}`
+        );
+
+    }
+
+
+    console.log(
+        "sales.xlsx successfully updated in GitHub."
+    );
+
+}
+
+
+// =====================================================
+// HELPER FUNCTION
 // =====================================================
 
 function getText(value) {
@@ -48,23 +313,29 @@ function getText(value) {
 
     }
 
+
     if (
         typeof value === "object" &&
         value.text !== undefined
     ) {
 
-        return String(value.text).trim();
+        return String(
+            value.text
+        ).trim();
 
     }
 
-    return String(value).trim();
+
+    return String(
+        value
+    ).trim();
 
 }
 
 
-// -----------------------------------------------------
-// Convert Excel date to YYYY-MM-DD
-// -----------------------------------------------------
+// =====================================================
+// EXCEL DATE -> YYYY-MM-DD
+// =====================================================
 
 function getDate(value) {
 
@@ -82,15 +353,23 @@ function getDate(value) {
         const year =
             value.getFullYear();
 
+
         const month =
             String(
                 value.getMonth() + 1
-            ).padStart(2, "0");
+            ).padStart(
+                2,
+                "0"
+            );
+
 
         const day =
             String(
                 value.getDate()
-            ).padStart(2, "0");
+            ).padStart(
+                2,
+                "0"
+            );
 
 
         return `${year}-${month}-${day}`;
@@ -98,16 +377,23 @@ function getDate(value) {
     }
 
 
-    return String(value).substring(0, 10);
+    return String(
+        value
+    ).substring(
+        0,
+        10
+    );
 
 }
 
 
-// -----------------------------------------------------
-// Previous month
-// -----------------------------------------------------
+// =====================================================
+// PREVIOUS MONTH
+// =====================================================
 
-function getPreviousMonth(month) {
+function getPreviousMonth(
+    month
+) {
 
     const date =
         new Date(
@@ -127,7 +413,10 @@ function getPreviousMonth(month) {
     const monthNumber =
         String(
             date.getMonth() + 1
-        ).padStart(2, "0");
+        ).padStart(
+            2,
+            "0"
+        );
 
 
     return `${year}-${monthNumber}`;
@@ -144,6 +433,11 @@ app.get(
     async (req, res) => {
 
         try {
+
+            // Get latest Excel from GitHub
+
+            await downloadExcelFromGitHub();
+
 
             const workbook =
                 new ExcelJS.Workbook();
@@ -182,7 +476,9 @@ app.get(
             ) {
 
                 const row =
-                    sheet.getRow(rowNumber);
+                    sheet.getRow(
+                        rowNumber
+                    );
 
 
                 const itemName =
@@ -226,13 +522,18 @@ app.get(
             }
 
 
-            res.json(items);
+            res.json(
+                items
+            );
 
         }
 
         catch (error) {
 
-            console.error(error);
+            console.error(
+                "ITEMS ERROR:",
+                error
+            );
 
 
             res.status(500).json({
@@ -261,6 +562,7 @@ app.get(
             const itemName =
                 req.query.item;
 
+
             const month =
                 req.query.month;
 
@@ -280,6 +582,11 @@ app.get(
             }
 
 
+            // Download latest Excel
+
+            await downloadExcelFromGitHub();
+
+
             const workbook =
                 new ExcelJS.Workbook();
 
@@ -294,15 +601,18 @@ app.get(
                     "ITEM_MASTER"
                 );
 
+
             const salesSheet =
                 workbook.getWorksheet(
                     "SALES"
                 );
 
+
             const supplySheet =
                 workbook.getWorksheet(
                     "SUPPLY"
                 );
+
 
             const stockSheet =
                 workbook.getWorksheet(
@@ -319,39 +629,45 @@ app.get(
             let initialOpening = 0;
 
 
-            for (
-                let rowNumber = 2;
-                rowNumber <= itemSheet.rowCount;
-                rowNumber++
-            ) {
+            if (itemSheet) {
 
-                const row =
-                    itemSheet.getRow(rowNumber);
-
-
-                const name =
-                    getText(
-                        row.getCell(1).value
-                    );
-
-
-                if (
-                    name === itemName
+                for (
+                    let rowNumber = 2;
+                    rowNumber <= itemSheet.rowCount;
+                    rowNumber++
                 ) {
 
-                    itemPrice =
-                        Number(
-                            row.getCell(2).value || 0
+                    const row =
+                        itemSheet.getRow(
+                            rowNumber
                         );
 
 
-                    initialOpening =
-                        Number(
-                            row.getCell(3).value || 0
+                    const name =
+                        getText(
+                            row.getCell(1).value
                         );
 
 
-                    break;
+                    if (
+                        name === itemName
+                    ) {
+
+                        itemPrice =
+                            Number(
+                                row.getCell(2).value || 0
+                            );
+
+
+                        initialOpening =
+                            Number(
+                                row.getCell(3).value || 0
+                            );
+
+
+                        break;
+
+                    }
 
                 }
 
@@ -363,7 +679,9 @@ app.get(
             // =================================================
 
             const previousMonth =
-                getPreviousMonth(month);
+                getPreviousMonth(
+                    month
+                );
 
 
             // =================================================
@@ -532,10 +850,6 @@ app.get(
                 itemPrice;
 
 
-            // =================================================
-            // RESPONSE
-            // =================================================
-
             res.json({
 
                 item:
@@ -565,7 +879,10 @@ app.get(
 
         catch (error) {
 
-            console.error(error);
+            console.error(
+                "CURRENT STOCK ERROR:",
+                error
+            );
 
 
             res.status(500).json({
@@ -595,15 +912,18 @@ async function rebuildMonthlyStock(
             "ITEM_MASTER"
         );
 
+
     const salesSheet =
         workbook.getWorksheet(
             "SALES"
         );
 
+
     const supplySheet =
         workbook.getWorksheet(
             "SUPPLY"
         );
+
 
     let stockSheet =
         workbook.getWorksheet(
@@ -611,8 +931,17 @@ async function rebuildMonthlyStock(
         );
 
 
+    if (!itemSheet) {
+
+        throw new Error(
+            "ITEM_MASTER sheet not found."
+        );
+
+    }
+
+
     // =================================================
-    // CREATE MONTHLY STOCK SHEET IF MISSING
+    // CREATE MONTHLY STOCK SHEET
     // =================================================
 
     if (!stockSheet) {
@@ -682,7 +1011,9 @@ async function rebuildMonthlyStock(
     // =================================================
 
     const previousMonth =
-        getPreviousMonth(month);
+        getPreviousMonth(
+            month
+        );
 
 
     // =================================================
@@ -731,7 +1062,7 @@ async function rebuildMonthlyStock(
 
 
     // =================================================
-    // READ ITEMS
+    // READ ITEM MASTER
     // =================================================
 
     const items = [];
@@ -794,7 +1125,9 @@ async function rebuildMonthlyStock(
     // CALCULATE EACH ITEM
     // =================================================
 
-    for (const item of items) {
+    for (
+        const item of items
+    ) {
 
         // ---------------------------------------------
         // OPENING
@@ -1047,37 +1380,57 @@ async function rebuildMonthlyStock(
     // =================================================
 
     stockSheet.getColumn(1).width = 12;
+
     stockSheet.getColumn(2).width = 35;
+
     stockSheet.getColumn(3).width = 15;
+
     stockSheet.getColumn(4).width = 16;
+
     stockSheet.getColumn(5).width = 18;
+
     stockSheet.getColumn(6).width = 12;
+
     stockSheet.getColumn(7).width = 18;
+
     stockSheet.getColumn(8).width = 15;
+
     stockSheet.getColumn(9).width = 18;
+
     stockSheet.getColumn(10).width = 18;
+
     stockSheet.getColumn(11).width = 15;
+
     stockSheet.getColumn(12).width = 18;
+
     stockSheet.getColumn(13).width = 18;
 
 }
 
-// =====================================================
-// BUILD DAILY SALES REPORT
-// =====================================================
 
 // =====================================================
 // REBUILD DAILY SALES REPORT
 // =====================================================
 
-async function rebuildDailySalesReport(workbook) {
+async function rebuildDailySalesReport(
+    workbook
+) {
 
     const salesSheet =
-        workbook.getWorksheet("SALES");
+        workbook.getWorksheet(
+            "SALES"
+        );
+
+
+    if (!salesSheet) {
+
+        return;
+
+    }
 
 
     // =================================================
-    // DELETE OLD DAILY REPORT
+    // DELETE OLD REPORT
     // =================================================
 
     const oldReport =
@@ -1096,7 +1449,7 @@ async function rebuildDailySalesReport(workbook) {
 
 
     // =================================================
-    // CREATE NEW DAILY REPORT
+    // CREATE NEW REPORT
     // =================================================
 
     const reportSheet =
@@ -1154,8 +1507,6 @@ async function rebuildDailySalesReport(workbook) {
             );
 
 
-        // Ignore empty rows
-
         if (
             !date ||
             !item
@@ -1166,16 +1517,14 @@ async function rebuildDailySalesReport(workbook) {
         }
 
 
-        // Create date
-
-        if (!dailySales[date]) {
+        if (
+            !dailySales[date]
+        ) {
 
             dailySales[date] = {};
 
         }
 
-
-        // Create item
 
         if (
             !dailySales[date][item]
@@ -1183,24 +1532,23 @@ async function rebuildDailySalesReport(workbook) {
 
             dailySales[date][item] = {
 
-                price: price,
+                price:
+                    price,
 
-                quantity: 0,
+                quantity:
+                    0,
 
-                saleValue: 0
+                saleValue:
+                    0
 
             };
 
         }
 
 
-        // Add quantity
-
         dailySales[date][item].quantity +=
             quantity;
 
-
-        // Add sale value
 
         dailySales[date][item].saleValue +=
             saleValue;
@@ -1222,7 +1570,9 @@ async function rebuildDailySalesReport(workbook) {
     // CREATE DAILY SECTIONS
     // =================================================
 
-    for (const date of dates) {
+    for (
+        const date of dates
+    ) {
 
         const dateObject =
             new Date(
@@ -1247,9 +1597,9 @@ async function rebuildDailySalesReport(workbook) {
             dateObject.getFullYear();
 
 
-        // =============================================
-        // DAILY TITLE
-        // =============================================
+        // ---------------------------------------------
+        // TITLE
+        // ---------------------------------------------
 
         const titleRow =
             reportSheet.addRow([
@@ -1268,16 +1618,16 @@ async function rebuildDailySalesReport(workbook) {
         };
 
 
-        // =============================================
+        // ---------------------------------------------
         // EMPTY ROW
-        // =============================================
+        // ---------------------------------------------
 
         reportSheet.addRow([]);
 
 
-        // =============================================
-        // COLUMN HEADERS
-        // =============================================
+        // ---------------------------------------------
+        // HEADER
+        // ---------------------------------------------
 
         const headerRow =
             reportSheet.addRow([
@@ -1302,18 +1652,18 @@ async function rebuildDailySalesReport(workbook) {
         };
 
 
-        // =============================================
-        // DAILY TOTALS
-        // =============================================
+        // ---------------------------------------------
+        // TOTALS
+        // ---------------------------------------------
 
         let dailyQuantity = 0;
 
         let dailyValue = 0;
 
 
-        // =============================================
+        // ---------------------------------------------
         // ITEMS
-        // =============================================
+        // ---------------------------------------------
 
         const items =
             Object.keys(
@@ -1321,7 +1671,9 @@ async function rebuildDailySalesReport(workbook) {
             );
 
 
-        for (const itemName of items) {
+        for (
+            const itemName of items
+        ) {
 
             const data =
                 dailySales[date][itemName];
@@ -1352,9 +1704,9 @@ async function rebuildDailySalesReport(workbook) {
         }
 
 
-        // =============================================
+        // ---------------------------------------------
         // DAILY TOTAL
-        // =============================================
+        // ---------------------------------------------
 
         const totalRow =
             reportSheet.addRow([
@@ -1378,10 +1730,6 @@ async function rebuildDailySalesReport(workbook) {
 
         };
 
-
-        // =============================================
-        // SPACE BETWEEN DAYS
-        // =============================================
 
         reportSheet.addRow([]);
 
@@ -1502,7 +1850,17 @@ app.post(
 
 
             const month =
-                sale.date.substring(0, 7);
+                sale.date.substring(
+                    0,
+                    7
+                );
+
+
+            // =================================================
+            // DOWNLOAD LATEST GITHUB FILE
+            // =================================================
+
+            await downloadExcelFromGitHub();
 
 
             // =================================================
@@ -1535,7 +1893,7 @@ app.post(
 
 
             // =================================================
-            // MAKE SURE SALES HEADER EXISTS
+            // SALES HEADER
             // =================================================
 
             if (
@@ -1545,10 +1903,15 @@ app.post(
                 salesSheet.addRow([
 
                     "DATE",
+
                     "MONTH",
+
                     "ITEM NAME",
+
                     "UNIT PRICE",
+
                     "QUANTITY",
+
                     "SALE VALUE"
 
                 ]);
@@ -1557,7 +1920,7 @@ app.post(
 
 
             // =================================================
-            // FIND SAME DATE + SAME ITEM
+            // FIND SAME DATE + ITEM
             // =================================================
 
             let existingRow = null;
@@ -1587,8 +1950,6 @@ app.post(
                     );
 
 
-                // Ignore invalid/empty rows
-
                 if (
                     !rowDate ||
                     !rowItem
@@ -1613,10 +1974,28 @@ app.post(
 
             }
 
-            console.log("Looking for existing sale...");
-            console.log("Date from website:", sale.date);
-            console.log("Item from website:", sale.item);
-            console.log("Existing row:", existingRow);
+
+            console.log(
+                "Looking for existing sale..."
+            );
+
+
+            console.log(
+                "Date from website:",
+                sale.date
+            );
+
+
+            console.log(
+                "Item from website:",
+                sale.item
+            );
+
+
+            console.log(
+                "Existing row:",
+                existingRow
+            );
 
 
             // =================================================
@@ -1706,6 +2085,7 @@ app.post(
                 month
             );
 
+
             // =================================================
             // REBUILD DAILY SALES REPORT
             // =================================================
@@ -1716,16 +2096,38 @@ app.post(
 
 
             // =================================================
-            // SAVE EXCEL
+            // CREATE UPDATED EXCEL BUFFER
             // =================================================
 
-            await workbook.xlsx.writeFile(
-                filePath
+            const updatedBuffer =
+                await workbook.xlsx.writeBuffer();
+
+
+            // =================================================
+            // SAVE LOCAL COPY
+            // =================================================
+
+            fs.writeFileSync(
+                filePath,
+                Buffer.from(
+                    updatedBuffer
+                )
+            );
+
+
+            // =================================================
+            // UPLOAD EXACT BUFFER TO GITHUB
+            // =================================================
+
+            await uploadExcelToGitHub(
+                Buffer.from(
+                    updatedBuffer
+                )
             );
 
 
             console.log(
-                "Sales and Monthly Stock updated."
+                "Sales and reports updated successfully."
             );
 
 
@@ -1822,8 +2224,22 @@ app.post(
 
 
             const month =
-                supply.date.substring(0, 7);
+                supply.date.substring(
+                    0,
+                    7
+                );
 
+
+            // =================================================
+            // DOWNLOAD LATEST GITHUB FILE
+            // =================================================
+
+            await downloadExcelFromGitHub();
+
+
+            // =================================================
+            // OPEN WORKBOOK
+            // =================================================
 
             const workbook =
                 new ExcelJS.Workbook();
@@ -1850,7 +2266,9 @@ app.post(
             }
 
 
-            // Header
+            // =================================================
+            // HEADER
+            // =================================================
 
             if (
                 sheet.rowCount === 0
@@ -1859,14 +2277,21 @@ app.post(
                 sheet.addRow([
 
                     "DATE",
+
                     "MONTH",
+
                     "ITEM NAME",
+
                     "QUANTITY"
 
                 ]);
 
             }
 
+
+            // =================================================
+            // ADD SUPPLY
+            // =================================================
 
             sheet.addRow([
 
@@ -1882,7 +2307,7 @@ app.post(
 
 
             // =================================================
-            // UPDATE MONTHLY STOCK
+            // REBUILD MONTHLY STOCK
             // =================================================
 
             await rebuildMonthlyStock(
@@ -1891,8 +2316,34 @@ app.post(
             );
 
 
-            await workbook.xlsx.writeFile(
-                filePath
+            // =================================================
+            // CREATE BUFFER
+            // =================================================
+
+            const updatedBuffer =
+                await workbook.xlsx.writeBuffer();
+
+
+            // =================================================
+            // SAVE LOCAL COPY
+            // =================================================
+
+            fs.writeFileSync(
+                filePath,
+                Buffer.from(
+                    updatedBuffer
+                )
+            );
+
+
+            // =================================================
+            // UPLOAD TO GITHUB
+            // =================================================
+
+            await uploadExcelToGitHub(
+                Buffer.from(
+                    updatedBuffer
+                )
             );
 
 
@@ -1910,6 +2361,7 @@ app.post(
         catch (error) {
 
             console.error(
+                "SAVE SUPPLY ERROR:",
                 error
             );
 
@@ -1956,6 +2408,11 @@ app.get(
             }
 
 
+            // Download latest GitHub file
+
+            await downloadExcelFromGitHub();
+
+
             const workbook =
                 new ExcelJS.Workbook();
 
@@ -1968,11 +2425,6 @@ app.get(
             await rebuildMonthlyStock(
                 workbook,
                 month
-            );
-
-
-            await workbook.xlsx.writeFile(
-                filePath
             );
 
 
@@ -2079,13 +2531,16 @@ app.get(
             }
 
 
-            res.json(result);
+            res.json(
+                result
+            );
 
         }
 
         catch (error) {
 
             console.error(
+                "MONTHLY STOCK ERROR:",
                 error
             );
 
@@ -2103,51 +2558,110 @@ app.get(
 );
 
 
-
-
-
 // =====================================================
 // REBUILD ALL REPORTS
 // =====================================================
 
 async function rebuildAllReports() {
 
-    const workbook = new ExcelJS.Workbook();
+    const workbook =
+        new ExcelJS.Workbook();
 
-    await workbook.xlsx.readFile(filePath);
 
-    // Get SALES sheet
-    const salesSheet = workbook.getWorksheet("SALES");
+    await workbook.xlsx.readFile(
+        filePath
+    );
 
-    if (!salesSheet) {
-        console.log("SALES sheet not found.");
-        return;
-    }
 
-    // Find all months from SALES data
-    const months = new Set();
+    // =================================================
+    // CURRENT MONTH
+    // =================================================
 
-    for (
-        let rowNumber = 2;
-        rowNumber <= salesSheet.rowCount;
-        rowNumber++
-    ) {
+    const today =
+        new Date();
 
-        const row = salesSheet.getRow(rowNumber);
 
-        const date = getDate(
-            row.getCell(1).value
+    const currentMonth =
+        today.getFullYear() +
+        "-" +
+        String(
+            today.getMonth() + 1
+        ).padStart(
+            2,
+            "0"
         );
 
-        if (date) {
-            months.add(
-                date.substring(0, 7)
-            );
+
+    // =================================================
+    // SALES SHEET
+    // =================================================
+
+    const salesSheet =
+        workbook.getWorksheet(
+            "SALES"
+        );
+
+
+    // =================================================
+    // FIND ALL MONTHS
+    // =================================================
+
+    const months =
+        new Set();
+
+
+    if (salesSheet) {
+
+        for (
+            let rowNumber = 2;
+            rowNumber <= salesSheet.rowCount;
+            rowNumber++
+        ) {
+
+            const row =
+                salesSheet.getRow(
+                    rowNumber
+                );
+
+
+            const date =
+                getDate(
+                    row.getCell(1).value
+                );
+
+
+            if (date) {
+
+                months.add(
+                    date.substring(
+                        0,
+                        7
+                    )
+                );
+
+            }
+
         }
+
     }
 
-    // Rebuild Monthly Stock for every month
-    for (const month of months) {
+
+    // =================================================
+    // ALWAYS CURRENT MONTH
+    // =================================================
+
+    months.add(
+        currentMonth
+    );
+
+
+    // =================================================
+    // REBUILD MONTHLY STOCK
+    // =================================================
+
+    for (
+        const month of months
+    ) {
 
         await rebuildMonthlyStock(
             workbook,
@@ -2156,155 +2670,359 @@ async function rebuildAllReports() {
 
     }
 
-    // Rebuild Daily Sales Report
-    await rebuildDailySalesReport(
-        workbook
+
+    // =================================================
+    // REBUILD DAILY REPORT
+    // =================================================
+
+    if (salesSheet) {
+
+        await rebuildDailySalesReport(
+            workbook
+        );
+
+    }
+
+
+    // =================================================
+    // SAVE LOCAL FILE
+    // =================================================
+
+    const updatedBuffer =
+        await workbook.xlsx.writeBuffer();
+
+
+    fs.writeFileSync(
+        filePath,
+        Buffer.from(
+            updatedBuffer
+        )
     );
 
-    // Save Excel
-    await workbook.xlsx.writeFile(
-        filePath
-    );
 
     console.log(
         "All reports rebuilt successfully."
     );
-}
 
-rebuildAllReports();
+}
 
 
 // =====================================================
 // DASHBOARD SUMMARY
 // =====================================================
 
-app.get("/dashboard-summary", async (req, res) => {
+app.get(
+    "/dashboard-summary",
+    async (req, res) => {
 
-    try {
+        try {
 
-        const workbook = new ExcelJS.Workbook();
-
-        await workbook.xlsx.readFile(filePath);
-
-
-        const itemSheet =
-            workbook.getWorksheet("ITEM_MASTER");
-
-        const salesSheet =
-            workbook.getWorksheet("SALES");
-
-        const stockSheet =
-            workbook.getWorksheet("MONTHLY_STOCK");
+            await downloadExcelFromGitHub();
 
 
-        // =============================================
-        // TOTAL ITEMS
-        // =============================================
-
-        let totalItems = 0;
-
-        if (itemSheet) {
-
-            for (
-                let rowNumber = 2;
-                rowNumber <= itemSheet.rowCount;
-                rowNumber++
-            ) {
-
-                const itemName =
-                    getText(
-                        itemSheet
-                            .getRow(rowNumber)
-                            .getCell(1)
-                            .value
-                    );
-
-                if (itemName) {
-
-                    totalItems++;
-
-                }
-
-            }
-
-        }
+            const workbook =
+                new ExcelJS.Workbook();
 
 
-        // =============================================
-        // TODAY
-        // =============================================
-
-        const today = new Date();
-
-        const todayString =
-            today.getFullYear() +
-            "-" +
-            String(today.getMonth() + 1).padStart(2, "0") +
-            "-" +
-            String(today.getDate()).padStart(2, "0");
+            await workbook.xlsx.readFile(
+                filePath
+            );
 
 
-        // =============================================
-        // TODAY'S SALES
-        // =============================================
-
-        let todaySales = 0;
-
-        if (salesSheet) {
-
-            for (
-                let rowNumber = 2;
-                rowNumber <= salesSheet.rowCount;
-                rowNumber++
-            ) {
-
-                const row =
-                    salesSheet.getRow(rowNumber);
+            const itemSheet =
+                workbook.getWorksheet(
+                    "ITEM_MASTER"
+                );
 
 
-                const saleDate =
-                    getDate(
-                        row.getCell(1).value
-                    );
+            const salesSheet =
+                workbook.getWorksheet(
+                    "SALES"
+                );
 
 
-                const saleValue =
-                    Number(
-                        row.getCell(6).value || 0
-                    );
+            const stockSheet =
+                workbook.getWorksheet(
+                    "MONTHLY_STOCK"
+                );
 
 
-                if (
-                    saleDate === todayString
+            // =============================================
+            // TOTAL ITEMS
+            // =============================================
+
+            let totalItems = 0;
+
+
+            if (itemSheet) {
+
+                for (
+                    let rowNumber = 2;
+                    rowNumber <= itemSheet.rowCount;
+                    rowNumber++
                 ) {
 
-                    todaySales += saleValue;
+                    const itemName =
+                        getText(
+                            itemSheet
+                                .getRow(
+                                    rowNumber
+                                )
+                                .getCell(1)
+                                .value
+                        );
+
+
+                    if (itemName) {
+
+                        totalItems++;
+
+                    }
 
                 }
 
             }
 
+
+            // =============================================
+            // TODAY
+            // =============================================
+
+            const today =
+                new Date();
+
+
+            const todayString =
+                today.getFullYear() +
+                "-" +
+                String(
+                    today.getMonth() + 1
+                ).padStart(
+                    2,
+                    "0"
+                ) +
+                "-" +
+                String(
+                    today.getDate()
+                ).padStart(
+                    2,
+                    "0"
+                );
+
+
+            // =============================================
+            // TODAY SALES
+            // =============================================
+
+            let todaySales = 0;
+
+
+            if (salesSheet) {
+
+                for (
+                    let rowNumber = 2;
+                    rowNumber <= salesSheet.rowCount;
+                    rowNumber++
+                ) {
+
+                    const row =
+                        salesSheet.getRow(
+                            rowNumber
+                        );
+
+
+                    const saleDate =
+                        getDate(
+                            row.getCell(1).value
+                        );
+
+
+                    const saleValue =
+                        Number(
+                            row.getCell(6).value || 0
+                        );
+
+
+                    if (
+                        saleDate === todayString
+                    ) {
+
+                        todaySales +=
+                            saleValue;
+
+                    }
+
+                }
+
+            }
+
+
+            // =============================================
+            // CURRENT MONTH
+            // =============================================
+
+            const currentMonth =
+                todayString.substring(
+                    0,
+                    7
+                );
+
+
+            // =============================================
+            // TOTAL STOCK
+            // =============================================
+
+            let totalStock = 0;
+
+            let lowStock = 0;
+
+
+            if (stockSheet) {
+
+                for (
+                    let rowNumber = 2;
+                    rowNumber <= stockSheet.rowCount;
+                    rowNumber++
+                ) {
+
+                    const row =
+                        stockSheet.getRow(
+                            rowNumber
+                        );
+
+
+                    const rowMonth =
+                        getText(
+                            row.getCell(1).value
+                        );
+
+
+                    if (
+                        rowMonth !== currentMonth
+                    ) {
+
+                        continue;
+
+                    }
+
+
+                    const closingStock =
+                        Number(
+                            row.getCell(12).value || 0
+                        );
+
+
+                    totalStock +=
+                        closingStock;
+
+
+                    if (
+                        closingStock <= 10
+                    ) {
+
+                        lowStock++;
+
+                    }
+
+                }
+
+            }
+
+
+            res.json({
+
+                totalItems:
+                    totalItems,
+
+                todaySales:
+                    todaySales,
+
+                totalStock:
+                    totalStock,
+
+                lowStock:
+                    lowStock
+
+            });
+
         }
 
+        catch (error) {
 
-        // =============================================
-        // CURRENT MONTH
-        // =============================================
-
-        const currentMonth =
-            todayString.substring(0, 7);
-
-
-        // =============================================
-        // TOTAL STOCK
-        // =============================================
-
-        let totalStock = 0;
-
-        let lowStock = 0;
+            console.error(
+                "DASHBOARD ERROR:",
+                error
+            );
 
 
-        if (stockSheet) {
+            res.status(500).json({
+
+                message:
+                    "Unable to load dashboard",
+
+                error:
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// DASHBOARD INVENTORY
+// =====================================================
+
+app.get(
+    "/dashboard-inventory",
+    async (req, res) => {
+
+        try {
+
+            await downloadExcelFromGitHub();
+
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+
+            await workbook.xlsx.readFile(
+                filePath
+            );
+
+
+            const stockSheet =
+                workbook.getWorksheet(
+                    "MONTHLY_STOCK"
+                );
+
+
+            if (!stockSheet) {
+
+                return res.json([]);
+
+            }
+
+
+            const today =
+                new Date();
+
+
+            const currentMonth =
+                today.getFullYear() +
+                "-" +
+                String(
+                    today.getMonth() + 1
+                ).padStart(
+                    2,
+                    "0"
+                );
+
+
+            const inventory = [];
+
 
             for (
                 let rowNumber = 2;
@@ -2313,22 +3031,30 @@ app.get("/dashboard-summary", async (req, res) => {
             ) {
 
                 const row =
-                    stockSheet.getRow(rowNumber);
+                    stockSheet.getRow(
+                        rowNumber
+                    );
 
 
-                const rowMonth =
+                const month =
                     getText(
                         row.getCell(1).value
                     );
 
 
                 if (
-                    rowMonth !== currentMonth
+                    month !== currentMonth
                 ) {
 
                     continue;
 
                 }
+
+
+                const itemName =
+                    getText(
+                        row.getCell(2).value
+                    );
 
 
                 const closingStock =
@@ -2337,284 +3063,582 @@ app.get("/dashboard-summary", async (req, res) => {
                     );
 
 
-                totalStock +=
-                    closingStock;
+                if (!itemName) {
 
-
-                if (
-                    closingStock <= 10
-                ) {
-
-                    lowStock++;
+                    continue;
 
                 }
 
+
+                let status =
+                    "In Stock";
+
+
+                if (
+                    closingStock <= 0
+                ) {
+
+                    status =
+                        "Out of Stock";
+
+                }
+
+                else if (
+                    closingStock <= 10
+                ) {
+
+                    status =
+                        "Low Stock";
+
+                }
+
+
+                inventory.push({
+
+                    sno:
+                        inventory.length + 1,
+
+                    itemName:
+                        itemName,
+
+                    stock:
+                        closingStock,
+
+                    status:
+                        status
+
+                });
+
             }
+
+
+            res.json(
+                inventory
+            );
 
         }
 
+        catch (error) {
 
-        // =============================================
-        // SEND DATA
-        // =============================================
+            console.error(
+                "DASHBOARD INVENTORY ERROR:",
+                error
+            );
 
-        res.json({
 
-            totalItems:
-                totalItems,
+            res.status(500).json({
 
-            todaySales:
-                todaySales,
-
-            totalStock:
-                totalStock,
-
-            lowStock:
-                lowStock
-
-        });
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "DASHBOARD ERROR:",
-            error
-        );
-
-
-        res.status(500).json({
-
-            message:
-                "Unable to load dashboard",
-
-            error:
-                error.message
-
-        });
-
-    }
-
-});
-
-
-// =====================================================
-// DASHBOARD INVENTORY
-// =====================================================
-
-app.get("/dashboard-inventory", async (req, res) => {
-
-    try {
-
-        const workbook = new ExcelJS.Workbook();
-
-        await workbook.xlsx.readFile(filePath);
-
-
-        const stockSheet =
-            workbook.getWorksheet("MONTHLY_STOCK");
-
-
-        if (!stockSheet) {
-
-            return res.json([]);
-
-        }
-
-
-        const today = new Date();
-
-        const currentMonth =
-            today.getFullYear() +
-            "-" +
-            String(today.getMonth() + 1).padStart(2, "0");
-
-
-        const inventory = [];
-
-
-        for (
-            let rowNumber = 2;
-            rowNumber <= stockSheet.rowCount;
-            rowNumber++
-        ) {
-
-            const row =
-                stockSheet.getRow(rowNumber);
-
-
-            const month =
-                getText(
-                    row.getCell(1).value
-                );
-
-
-            if (
-                month !== currentMonth
-            ) {
-
-                continue;
-
-            }
-
-
-            const itemName =
-                getText(
-                    row.getCell(2).value
-                );
-
-
-            const closingStock =
-                Number(
-                    row.getCell(12).value || 0
-                );
-
-
-            if (!itemName) {
-
-                continue;
-
-            }
-
-
-            let status = "In Stock";
-
-
-            if (closingStock <= 0) {
-
-                status = "Out of Stock";
-
-            }
-
-            else if (closingStock <= 10) {
-
-                status = "Low Stock";
-
-            }
-
-
-            inventory.push({
-
-                sno:
-                   inventory.length + 1,
-
-                itemName:
-                    itemName,
-
-                stock:
-                    closingStock,
-
-                status:
-                    status
+                message:
+                    "Unable to load inventory"
 
             });
 
         }
 
-
-        res.json(inventory);
-
     }
-
-    catch (error) {
-
-        console.error(
-            "DASHBOARD INVENTORY ERROR:",
-            error
-        );
-
-
-        res.status(500).json({
-
-            message:
-                "Unable to load inventory"
-
-        });
-
-    }
-
-});
-
+);
 
 
 // =====================================================
 // GET DAILY SALES REPORT
 // =====================================================
 
-app.get("/daily-sales-report", async (req, res) => {
+app.get(
+    "/daily-sales-report",
+    async (req, res) => {
 
-    try {
+        try {
 
-        const workbook = new ExcelJS.Workbook();
+            await downloadExcelFromGitHub();
 
-        await workbook.xlsx.readFile(filePath);
 
-        const sheet =
-            workbook.getWorksheet("DAILY_SALES_REPORT");
+            const workbook =
+                new ExcelJS.Workbook();
 
-        if (!sheet) {
 
-            return res.json([]);
+            await workbook.xlsx.readFile(
+                filePath
+            );
 
-        }
 
-        const report = [];
+            const sheet =
+                workbook.getWorksheet(
+                    "DAILY_SALES_REPORT"
+                );
 
-        for (
-            let rowNumber = 1;
-            rowNumber <= sheet.rowCount;
-            rowNumber++
-        ) {
 
-            const row =
-                sheet.getRow(rowNumber);
+            if (!sheet) {
 
-            const values = [];
+                return res.json([]);
+
+            }
+
+
+            const report = [];
+
 
             for (
-                let columnNumber = 1;
-                columnNumber <= 5;
-                columnNumber++
+                let rowNumber = 1;
+                rowNumber <= sheet.rowCount;
+                rowNumber++
             ) {
 
-                values.push(
-                    getText(
-                        row.getCell(columnNumber).value
+                const row =
+                    sheet.getRow(
+                        rowNumber
+                    );
+
+
+                const values = [];
+
+
+                for (
+                    let columnNumber = 1;
+                    columnNumber <= 5;
+                    columnNumber++
+                ) {
+
+                    values.push(
+                        getText(
+                            row.getCell(
+                                columnNumber
+                            ).value
+                        )
+                    );
+
+                }
+
+
+                if (
+                    values.every(
+                        value =>
+                            value === ""
                     )
+                ) {
+
+                    continue;
+
+                }
+
+
+                report.push(
+                    values
                 );
 
             }
 
-            // Ignore completely empty rows
 
-            if (
-                values.every(value => value === "")
-            ) {
-
-                continue;
-
-            }
-
-            report.push(values);
+            res.json(
+                report
+            );
 
         }
 
-        res.json(report);
+        catch (error) {
+
+            console.error(
+                "DAILY SALES REPORT ERROR:",
+                error
+            );
+
+
+            res.status(500).json({
+
+                message:
+                    "Unable to load daily sales report"
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// START SERVER
+// =====================================================
+
+const PORT =
+    process.env.PORT || 3000;
+
+
+async function startServer() {
+
+    try {
+
+        console.log(
+            "Downloading latest Excel file from GitHub..."
+        );
+
+
+        // =================================================
+        // DOWNLOAD LATEST FILE
+        // =================================================
+
+        await downloadExcelFromGitHub();
+
+
+        // =================================================
+        // REBUILD REPORTS
+        // =================================================
+
+        await rebuildAllReports();
+
+        
+
+
+
+        // =================================================
+        // START EXPRESS
+        // =================================================
+
+        app.listen(
+            PORT,
+            "0.0.0.0",
+            () => {
+
+                console.log(
+                    `Server running on port ${PORT}`
+                );
+
+            }
+        );
 
     }
 
     catch (error) {
 
         console.error(
-            "DAILY SALES REPORT ERROR:",
+            "SERVER STARTUP ERROR:",
             error
         );
 
-        res.status(500).json({
+
+        process.exit(1);
+
+    }
+
+}
+
+
+
+// =====================================================
+// ADD NEW ITEM
+// =====================================================
+
+app.post("/add-item", async (req, res) => {
+
+    try {
+
+        const {
+            itemName,
+            unitPrice,
+            openingStock
+        } = req.body;
+
+
+        // =============================================
+        // VALIDATION
+        // =============================================
+
+        if (!itemName || itemName.trim() === "") {
+
+            return res.status(400).json({
+                success: false,
+                message: "Please enter item name."
+            });
+
+        }
+
+
+        if (
+            unitPrice === undefined ||
+            unitPrice === null ||
+            Number(unitPrice) <= 0
+        ) {
+
+            return res.status(400).json({
+                success: false,
+                message: "Please enter a valid unit price."
+            });
+
+        }
+
+
+        if (
+            openingStock === undefined ||
+            openingStock === null ||
+            Number(openingStock) < 0
+        ) {
+
+            return res.status(400).json({
+                success: false,
+                message: "Please enter a valid opening stock."
+            });
+
+        }
+
+
+        const name =
+            itemName.trim();
+
+        const price =
+            Number(unitPrice);
+
+        const stock =
+            Number(openingStock);
+
+
+        // =============================================
+        // LOAD EXCEL
+        // =============================================
+
+        const workbook =
+            new ExcelJS.Workbook();
+
+        await workbook.xlsx.readFile(
+            EXCEL_FILE
+        );
+
+
+        // =============================================
+        // ITEM MASTER
+        // =============================================
+
+        const itemMaster =
+            workbook.getWorksheet(
+                "ITEM_MASTER"
+            );
+
+
+        if (!itemMaster) {
+
+            return res.status(500).json({
+                success: false,
+                message: "ITEM_MASTER sheet not found."
+            });
+
+        }
+
+
+        // =============================================
+        // CHECK DUPLICATE ITEM
+        // =============================================
+
+        let duplicate = false;
+
+
+        itemMaster.eachRow(
+            (row, rowNumber) => {
+
+                if (rowNumber === 1) {
+                    return;
+                }
+
+
+                const existingName =
+                    getText(
+                        row.getCell(1).value
+                    )
+                    .trim()
+                    .toLowerCase();
+
+
+                if (
+                    existingName ===
+                    name.toLowerCase()
+                ) {
+
+                    duplicate = true;
+
+                }
+
+            }
+        );
+
+
+        if (duplicate) {
+
+            return res.status(400).json({
+                success: false,
+                message:
+                    `"${name}" already exists in ITEM_MASTER.`
+            });
+
+        }
+
+
+        // =============================================
+        // ADD TO ITEM_MASTER
+        // =============================================
+
+        itemMaster.addRow([
+            name,
+            price,
+            stock
+        ]);
+
+
+        // =============================================
+        // CURRENT MONTH
+        // =============================================
+
+        const now =
+            new Date();
+
+        const currentMonth =
+            `${now.getFullYear()}-${String(
+                now.getMonth() + 1
+            ).padStart(2, "0")}`;
+
+
+        // =============================================
+        // MONTHLY STOCK
+        // =============================================
+
+        let monthlyStock =
+            workbook.getWorksheet(
+                "MONTHLY_STOCK"
+            );
+
+
+        if (!monthlyStock) {
+
+            monthlyStock =
+                workbook.addWorksheet(
+                    "MONTHLY_STOCK"
+                );
+
+            monthlyStock.addRow([
+                "MONTH",
+                "ITEM NAME",
+                "UNIT PRICE",
+                "OPENING STOCK",
+                "OPENING VALUE",
+                "SUPPLY",
+                "SUPPLY VALUE",
+                "TOTAL STOCK",
+                "TOTAL VALUE",
+                "SALES QUANTITY",
+                "SALE VALUE",
+                "CLOSING STOCK",
+                "CLOSING VALUE"
+            ]);
+
+        }
+
+
+        // =============================================
+        // CALCULATE VALUES
+        // =============================================
+
+        const openingValue =
+            stock * price;
+
+        const supply =
+            0;
+
+        const supplyValue =
+            0;
+
+        const totalStock =
+            stock + supply;
+
+        const totalValue =
+            openingValue + supplyValue;
+
+        const salesQuantity =
+            0;
+
+        const saleValue =
+            0;
+
+        const closingStock =
+            totalStock - salesQuantity;
+
+        const closingValue =
+            closingStock * price;
+
+
+        // =============================================
+        // ADD TO MONTHLY STOCK
+        // =============================================
+
+        monthlyStock.addRow([
+            currentMonth,
+            name,
+            price,
+            stock,
+            openingValue,
+            supply,
+            supplyValue,
+            totalStock,
+            totalValue,
+            salesQuantity,
+            saleValue,
+            closingStock,
+            closingValue
+        ]);
+
+
+        // =============================================
+// SAVE EXCEL LOCALLY
+// =============================================
+
+await workbook.xlsx.writeFile(
+    EXCEL_FILE
+);
+
+
+// =============================================
+// READ UPDATED EXCEL FILE
+// =============================================
+
+const updatedFileBuffer =
+    fs.readFileSync(
+        EXCEL_FILE
+    );
+
+
+// =============================================
+// UPLOAD UPDATED EXCEL TO GITHUB
+// =============================================
+
+await uploadExcelToGitHub(
+    updatedFileBuffer
+);
+
+
+        // =============================================
+        // SUCCESS
+        // =============================================
+
+        res.json({
+
+            success: true,
 
             message:
-                "Unable to load daily sales report"
+                `"${name}" added successfully.`
+
+        });
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "ADD ITEM ERROR:",
+            error
+        );
+
+
+        res.status(500).json({
+
+            success: false,
+
+            message:
+                "Unable to add new item."
 
         });
 
@@ -2623,26 +3647,4 @@ app.get("/daily-sales-report", async (req, res) => {
 });
 
 
-// =====================================================
-// START SERVER
-// =====================================================
-
-const PORT = process.env.PORT || 3000;
-
-
-app.get("/health", (req, res) => {
-    res.status(200).send("OK");
-});
-
-
-app.listen(
-    PORT,
-    "0.0.0.0",
-    () => {
-
-        console.log(
-            `Server running on port ${PORT}`
-        );
-
-    }
-);
+startServer();

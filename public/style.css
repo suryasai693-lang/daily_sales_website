@@ -735,7 +735,7 @@ input[readonly] {
 
 .hidden {
 
-    display: none !important;
+    display: none;
 
 }
 
