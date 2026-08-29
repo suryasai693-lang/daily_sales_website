@@ -9,15 +9,22 @@ const fs = require("fs");
 // GITHUB CONFIGURATION
 // =====================================================
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_TOKEN =
+    process.env.GITHUB_TOKEN;
 
 const GITHUB_REPO =
-    "suryasai693-lang/daily_sales";
+    (process.env.GITHUB_REPO ||
+        "suryasai693-lang/daily_sales_website")
+        .replace(/^https?:\/\/github\.com\//i, "")
+        .replace(/\.git$/i, "")
+        .trim();
 
 const GITHUB_FILE_PATH =
+    process.env.GITHUB_FILE_PATH ||
     "data/sales.xlsx";
 
 const GITHUB_BRANCH =
+    process.env.GITHUB_BRANCH ||
     "main";
 
 
@@ -189,6 +196,162 @@ async function downloadExcelFromGitHub() {
         );
 
         return fs.readFileSync(filePath);
+
+    }
+
+}
+
+
+// =====================================================
+// UPLOAD EXCEL TO GITHUB ONLY (NO LOCAL WRITE)
+// =====================================================
+
+async function uploadExcelToGitHubOnly(
+    fileBuffer
+) {
+
+    if (!fileBuffer) {
+
+        throw new Error(
+            "Excel file buffer is empty."
+        );
+
+    }
+
+    if (!GITHUB_TOKEN) {
+
+        console.log(
+            "GITHUB_TOKEN is not configured. Skipping GitHub upload."
+        );
+
+        return;
+
+    }
+
+    try {
+
+        const content =
+            fileBuffer.toString("base64");
+
+
+        const getUrl =
+            `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
+
+
+        const getResponse =
+            await fetch(
+                getUrl,
+                {
+
+                    headers: {
+
+                        "Authorization":
+                            `Bearer ${GITHUB_TOKEN}`,
+
+                        "Accept":
+                            "application/vnd.github+json",
+
+                        "X-GitHub-Api-Version":
+                            "2022-11-28"
+
+                    }
+
+                }
+            );
+
+
+        if (!getResponse.ok) {
+
+            const errorText =
+                await getResponse.text();
+
+            console.warn(
+                `GitHub upload skipped: unable to get file info (${getResponse.status} ${errorText}).`
+            );
+
+            return;
+
+        }
+
+
+        const fileData =
+            await getResponse.json();
+
+
+        const updateUrl =
+            `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
+
+
+        const updateResponse =
+            await fetch(
+                updateUrl,
+                {
+
+                    method: "PUT",
+
+                    headers: {
+
+                        "Authorization":
+                            `Bearer ${GITHUB_TOKEN}`,
+
+                        "Accept":
+                            "application/vnd.github+json",
+
+                        "Content-Type":
+                            "application/json",
+
+                        "X-GitHub-Api-Version":
+                            "2022-11-28"
+
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            message:
+                                "Update sales.xlsx from DailyStock",
+
+                            content:
+                                content,
+
+                            sha:
+                                fileData.sha,
+
+                            branch:
+                                GITHUB_BRANCH
+
+                        })
+
+                }
+            );
+
+
+        if (!updateResponse.ok) {
+
+            const errorText =
+                await updateResponse.text();
+
+            console.warn(
+                `GitHub upload failed: ${updateResponse.status} ${errorText}.`
+            );
+
+            return;
+
+        }
+
+
+        console.log(
+            "sales.xlsx successfully updated in GitHub."
+        );
+
+    }
+
+    catch (error) {
+
+        console.warn(
+            "GitHub upload error:",
+            error.message
+        );
 
     }
 
@@ -2179,7 +2342,7 @@ app.post(
             // UPLOAD EXACT BUFFER TO GITHUB
             // =================================================
 
-            await uploadExcelToGitHub(
+            await uploadExcelToGitHubOnly(
                 Buffer.from(
                     updatedBuffer
                 )
@@ -2360,7 +2523,7 @@ app.delete(
                 Buffer.from(updatedBuffer)
             );
 
-            await uploadExcelToGitHub(
+            await uploadExcelToGitHubOnly(
                 Buffer.from(updatedBuffer)
             );
 
@@ -2565,12 +2728,11 @@ app.post(
                 )
             );
 
-
             // =================================================
             // UPLOAD TO GITHUB
             // =================================================
 
-            await uploadExcelToGitHub(
+            await uploadExcelToGitHubOnly(
                 Buffer.from(
                     updatedBuffer
                 )
