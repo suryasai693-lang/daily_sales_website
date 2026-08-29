@@ -1492,6 +1492,29 @@
                     .toISOString()
                     .split('T')[0];
 
+            // Convert selected date to comparable format
+            const selectedDateObj =
+                new Date(
+                    `${selectedDate}T00:00:00`
+                );
+
+            const selectedDay =
+                selectedDateObj.getDate();
+
+            const selectedMonth =
+                selectedDateObj.toLocaleString(
+                    "en-US",
+                    {
+                        month: "long"
+                    }
+                ).toUpperCase();
+
+            const selectedYear =
+                selectedDateObj.getFullYear();
+
+            const expectedHeader =
+                `SALES - ${selectedDay} ${selectedMonth} ${selectedYear}`;
+
             // Filter report to show only selected date
             const filteredReport = [];
             let foundDate = false;
@@ -1503,11 +1526,9 @@
                     row[0] &&
                     row[0].startsWith("SALES -")
                 ) {
-                    const headerDate =
-                        row[0].replace("SALES - ", "");
 
                     if (
-                        headerDate === selectedDate
+                        row[0] === expectedHeader
                     ) {
                         foundDate = true;
                         filteredReport.push(row);
