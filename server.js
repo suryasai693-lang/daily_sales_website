@@ -44,17 +44,47 @@ const filePath =
     );
 
 
+async function ensureLocalExcelFile() {
+
+    if (fs.existsSync(filePath)) {
+
+        return;
+
+    }
+
+    const workbook =
+        new ExcelJS.Workbook();
+
+    workbook.addWorksheet("SALES");
+    workbook.addWorksheet("ITEM_MASTER");
+    workbook.addWorksheet("SUPPLY");
+    workbook.addWorksheet("MONTHLY_STOCK");
+    workbook.addWorksheet("DAILY_SALES_REPORT");
+
+    await workbook.xlsx.writeFile(filePath);
+
+    console.log(
+        "Local sales.xlsx file was created."
+    );
+
+}
+
+
 // =====================================================
 // DOWNLOAD SALES.XLSX FROM GITHUB
 // =====================================================
 
 async function downloadExcelFromGitHub() {
 
+    await ensureLocalExcelFile();
+
     if (!GITHUB_TOKEN) {
 
-        throw new Error(
-            "GITHUB_TOKEN is not configured."
+        console.log(
+            "GITHUB_TOKEN is not configured. Using local sales.xlsx."
         );
+
+        return fs.readFileSync(filePath);
 
     }
 
@@ -159,11 +189,20 @@ async function uploadExcelToGitHub(
     fileBuffer
 ) {
 
+    await ensureLocalExcelFile();
+
     if (!GITHUB_TOKEN) {
 
-        throw new Error(
-            "GITHUB_TOKEN is not configured."
+        fs.writeFileSync(
+            filePath,
+            Buffer.from(fileBuffer)
         );
+
+        console.log(
+            "GITHUB_TOKEN is not configured. Local sales.xlsx updated."
+        );
+
+        return;
 
     }
 
@@ -2158,6 +2197,176 @@ app.post(
 
                 message:
                     "Error saving sale: " +
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// DELETE SALE
+// =====================================================
+
+app.delete(
+    "/delete-sale",
+    async (req, res) => {
+
+        try {
+
+            const sale =
+                req.body || {};
+
+            const date =
+                sale.date;
+
+            const item =
+                sale.item;
+
+            if (!date || !item) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Date and item are required to delete a sale."
+
+                });
+
+            }
+
+            const month =
+                date.substring(
+                    0,
+                    7
+                );
+
+            await downloadExcelFromGitHub();
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+            await workbook.xlsx.readFile(filePath);
+
+            const salesSheet =
+                workbook.getWorksheet("SALES");
+
+            if (!salesSheet) {
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    message:
+                        "No sales sheet found."
+
+                });
+
+            }
+
+            const rowsToDelete = [];
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= salesSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    salesSheet.getRow(rowNumber);
+
+                const rowDate =
+                    getDate(row.getCell(1).value);
+
+                const rowItem =
+                    getText(row.getCell(3).value);
+
+                if (
+                    rowDate === date &&
+                    rowItem === item
+                ) {
+
+                    rowsToDelete.push(rowNumber);
+
+                }
+
+            }
+
+            if (rowsToDelete.length === 0) {
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    message:
+                        "Sale not found."
+
+                });
+
+            }
+
+            rowsToDelete
+                .reverse()
+                .forEach(
+                    rowNumber => {
+
+                        salesSheet.spliceRows(
+                            rowNumber,
+                            1
+                        );
+
+                    }
+                );
+
+            await rebuildMonthlyStock(
+                workbook,
+                month
+            );
+
+            await rebuildDailySalesReport(
+                workbook
+            );
+
+            const updatedBuffer =
+                await workbook.xlsx.writeBuffer();
+
+            fs.writeFileSync(
+                filePath,
+                Buffer.from(updatedBuffer)
+            );
+
+            await uploadExcelToGitHub(
+                Buffer.from(updatedBuffer)
+            );
+
+            res.json({
+
+                success: true,
+
+                message:
+                    "Sale deleted successfully!"
+
+            });
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "DELETE SALE ERROR:",
+                error
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Error deleting sale: " +
                     error.message
 
             });

@@ -1540,6 +1540,10 @@
                                 Sale Value
                             </th>
 
+                            <th>
+                                Action
+                            </th>
+
                         </tr>
 
                     </thead>
@@ -1681,6 +1685,26 @@
                             ).toLocaleString("en-IN")}
                         </td>
 
+                        <td>
+                            <button
+                                type="button"
+                                class="delete-sale-button"
+                                data-date="${row[0]}"
+                                data-item="${row[1]}"
+                                style="
+                                    background:#c0392b;
+                                    color:#fff;
+                                    border:none;
+                                    padding:8px 10px;
+                                    border-radius:6px;
+                                    cursor:pointer;
+                                    font-weight:600;
+                                "
+                            >
+                                Delete
+                            </button>
+                        </td>
+
                     </tr>
 
                 `;
@@ -1703,6 +1727,95 @@
 
             container.innerHTML =
                 html;
+
+            container
+                .querySelectorAll(
+                    ".delete-sale-button"
+                )
+                .forEach(button => {
+
+                    button.addEventListener(
+                        "click",
+                        async () => {
+
+                            const date =
+                                button.dataset.date;
+
+                            const item =
+                                button.dataset.item;
+
+                            if (!date || !item) {
+
+                                return;
+
+                            }
+
+                            const confirmed =
+                                window.confirm(
+                                    `Delete the sale for ${item} on ${date}?`
+                                );
+
+                            if (!confirmed) {
+
+                                return;
+
+                            }
+
+                            try {
+
+                                const response =
+                                    await fetch(
+                                        "/delete-sale",
+                                        {
+                                            method: "DELETE",
+                                            headers: {
+                                                "Content-Type": "application/json"
+                                            },
+                                            body: JSON.stringify({
+                                                date,
+                                                item
+                                            })
+                                        }
+                                    );
+
+                                const result =
+                                    await response.json();
+
+                                if (!response.ok) {
+
+                                    throw new Error(
+                                        result.message ||
+                                        "Unable to delete sale"
+                                    );
+
+                                }
+
+                                alert(
+                                    result.message
+                                );
+
+                                loadDailySalesReport();
+
+                            }
+
+                            catch (error) {
+
+                                console.error(
+                                    "DELETE SALE ERROR:",
+                                    error
+                                );
+
+                                alert(
+                                    error.message ||
+                                    "Error deleting sale."
+                                );
+
+                            }
+
+                        }
+                    );
+
+                });
 
         }
 
