@@ -1692,6 +1692,26 @@
                         <td>
                             <button
                                 type="button"
+                                class="edit-sale-button"
+                                data-date="${row[0]}"
+                                data-item="${row[1]}"
+                                data-price="${row[2]}"
+                                data-quantity="${row[3]}"
+                                style="
+                                    background:#2196F3;
+                                    color:#fff;
+                                    border:none;
+                                    padding:8px 10px;
+                                    border-radius:6px;
+                                    cursor:pointer;
+                                    font-weight:600;
+                                    margin-right:5px;
+                                "
+                            >
+                                Edit
+                            </button>
+                            <button
+                                type="button"
                                 class="delete-sale-button"
                                 data-date="${row[0]}"
                                 data-item="${row[1]}"
@@ -1853,6 +1873,150 @@
                                 alert(
                                     error.message ||
                                     "Error deleting sale."
+                                );
+
+                            }
+
+                        }
+                    );
+
+                });
+
+            // =================================================
+            // EDIT SALE BUTTONS
+            // =================================================
+
+            container
+                .querySelectorAll(
+                    ".edit-sale-button"
+                )
+                .forEach(button => {
+
+                    button.addEventListener(
+                        "click",
+                        async () => {
+
+                            const date =
+                                button.dataset.date;
+
+                            const item =
+                                button.dataset.item;
+
+                            const price =
+                                Number(
+                                    button.dataset.price
+                                        .replace("₹", "")
+                                        .replace(/,/g, "")
+                                );
+
+                            const quantity =
+                                Number(
+                                    button.dataset.quantity
+                                );
+
+                            if (!date || !item) {
+
+                                return;
+
+                            }
+
+                            // Show edit form
+                            const newQuantity =
+                                prompt(
+                                    `Edit quantity for ${item} on ${date}\nCurrent quantity: ${quantity}`,
+                                    quantity
+                                );
+
+                            if (
+                                newQuantity === null
+                            ) {
+
+                                return;
+
+                            }
+
+                            const parsedQuantity =
+                                Number(
+                                    newQuantity
+                                );
+
+                            if (
+                                isNaN(parsedQuantity) ||
+                                parsedQuantity <= 0
+                            ) {
+
+                                alert(
+                                    "Please enter a valid quantity."
+                                );
+
+                                return;
+
+                            }
+
+                            try {
+
+                                const response =
+                                    await fetch(
+                                        "/update-sale",
+                                        {
+
+                                            method: "PUT",
+
+                                            headers: {
+
+                                                "Content-Type":
+                                                    "application/json"
+
+                                            },
+
+                                            body:
+                                                JSON.stringify({
+
+                                                    date,
+
+                                                    item,
+
+                                                    oldQuantity:
+                                                        quantity,
+
+                                                    newQuantity:
+                                                        parsedQuantity
+
+                                                })
+
+                                        }
+                                    );
+
+                                const result =
+                                    await response.json();
+
+                                if (!response.ok) {
+
+                                    throw new Error(
+                                        result.message ||
+                                        "Unable to update sale"
+                                    );
+
+                                }
+
+                                alert(
+                                    result.message
+                                );
+
+                                loadDailySalesReport();
+
+                            }
+
+                            catch (error) {
+
+                                console.error(
+                                    "EDIT SALE ERROR:",
+                                    error
+                                );
+
+                                alert(
+                                    error.message ||
+                                    "Error updating sale."
                                 );
 
                             }

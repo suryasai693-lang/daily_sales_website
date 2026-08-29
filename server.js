@@ -2562,6 +2562,208 @@ app.delete(
 
 
 // =====================================================
+// UPDATE SALE
+// =====================================================
+
+app.put(
+    "/update-sale",
+    async (req, res) => {
+
+        try {
+
+            const sale =
+                req.body || {};
+
+            const date =
+                sale.date;
+
+            const item =
+                sale.item;
+
+            const oldQuantity =
+                Number(
+                    sale.oldQuantity || 0
+                );
+
+            const newQuantity =
+                Number(
+                    sale.newQuantity || 0
+                );
+
+            if (!date || !item) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Date and item are required to update a sale."
+
+                });
+
+            }
+
+            if (
+                isNaN(newQuantity) ||
+                newQuantity <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    message:
+                        "Invalid quantity."
+
+                });
+
+            }
+
+            const month =
+                date.substring(
+                    0,
+                    7
+                );
+
+            await downloadExcelFromGitHub();
+
+            const workbook =
+                new ExcelJS.Workbook();
+
+            await workbook.xlsx.readFile(filePath);
+
+            const salesSheet =
+                workbook.getWorksheet("SALES");
+
+            if (!salesSheet) {
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    message:
+                        "No sales sheet found."
+
+                });
+
+            }
+
+            let foundSale = false;
+            let salePrice = 0;
+
+            for (
+                let rowNumber = 2;
+                rowNumber <= salesSheet.rowCount;
+                rowNumber++
+            ) {
+
+                const row =
+                    salesSheet.getRow(rowNumber);
+
+                const rowDate =
+                    getDate(row.getCell(1).value);
+
+                const rowItem =
+                    getText(row.getCell(3).value);
+
+                if (
+                    rowDate === date &&
+                    rowItem === item
+                ) {
+
+                    // Found the sale
+                    salePrice =
+                        Number(
+                            row.getCell(4).value || 0
+                        );
+
+                    const newSaleValue =
+                        salePrice *
+                        newQuantity;
+
+                    row.getCell(5).value =
+                        newQuantity;
+
+                    row.getCell(6).value =
+                        newSaleValue;
+
+                    foundSale = true;
+
+                    break;
+
+                }
+
+            }
+
+            if (!foundSale) {
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    message:
+                        "Sale not found."
+
+                });
+
+            }
+
+            await rebuildMonthlyStock(
+                workbook,
+                month
+            );
+
+            await rebuildDailySalesReport(
+                workbook
+            );
+
+            const updatedBuffer =
+                await workbook.xlsx.writeBuffer();
+
+            fs.writeFileSync(
+                filePath,
+                Buffer.from(updatedBuffer)
+            );
+
+            await uploadExcelToGitHubOnly(
+                Buffer.from(updatedBuffer)
+            );
+
+            res.json({
+
+                success: true,
+
+                message:
+                    "Sale updated successfully!"
+
+            });
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "UPDATE SALE ERROR:",
+                error
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Error updating sale: " +
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================================
 // SAVE SUPPLY
 // =====================================================
 
