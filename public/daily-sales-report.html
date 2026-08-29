@@ -183,9 +183,18 @@
 
             <div class="header-date">
 
-                <span id="currentDate">
-                    Today
-                </span>
+                <input
+                    type="date"
+                    id="currentDate"
+                    onchange="loadDailySalesReport()"
+                    style="
+                        padding: 8px 12px;
+                        border: 1px solid #ddd;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        cursor: pointer;
+                    "
+                >
 
             </div>
 

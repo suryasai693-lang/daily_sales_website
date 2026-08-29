@@ -696,6 +696,12 @@ input[readonly] {
 
 }
 
+.report-controls .secondary-button {
+
+    height: 43px;
+
+}
+
 
 .report-container {
 

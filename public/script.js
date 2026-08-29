@@ -1454,6 +1454,10 @@
                 "dailySalesReportContainer"
             );
 
+        const dateInput =
+            document.getElementById(
+                "currentDate"
+            );
 
         // If we are not on the Daily Sales Report page,
         // do nothing.
@@ -1464,14 +1468,12 @@
 
         }
 
-
         try {
 
             const response =
                 await fetch(
                     "/daily-sales-report"
                 );
-
 
             if (!response.ok) {
 
@@ -1481,24 +1483,75 @@
 
             }
 
-
             const report =
                 await response.json();
 
+            // Get selected date from input
+            const selectedDate =
+                dateInput?.value || new Date()
+                    .toISOString()
+                    .split('T')[0];
+
+            // Filter report to show only selected date
+            const filteredReport = [];
+            let foundDate = false;
+
+            report.forEach(row => {
+
+                // Check if this is the date section header
+                if (
+                    row[0] &&
+                    row[0].startsWith("SALES -")
+                ) {
+                    const headerDate =
+                        row[0].replace("SALES - ", "");
+
+                    if (
+                        headerDate === selectedDate
+                    ) {
+                        foundDate = true;
+                        filteredReport.push(row);
+                    }
+                    else if (foundDate) {
+                        // We've moved past our date
+                        return;
+                    }
+
+                    return;
+                }
+
+                // Add rows only if we found our date
+                if (foundDate) {
+
+                    filteredReport.push(row);
+
+                    // Stop when we hit next date section
+                    if (
+                        row[0] &&
+                        row[0].startsWith("SALES -")
+                    ) {
+
+                        return;
+
+                    }
+
+                }
+
+            });
 
             // =================================================
             // NO DATA
             // =================================================
 
             if (
-                !report ||
-                report.length === 0
+                !filteredReport ||
+                filteredReport.length === 0
             ) {
 
                 container.innerHTML = `
 
                     <p>
-                        No daily sales report available.
+                        No sales recorded for ${selectedDate}.
                     </p>
 
                 `;
@@ -1506,7 +1559,6 @@
                 return;
 
             }
-
 
             // =================================================
             // CREATE TABLE
@@ -1552,52 +1604,13 @@
 
             `;
 
-
             // =================================================
-            // LOOP REPORT
+            // LOOP FILTERED REPORT
             // =================================================
 
-            report.forEach(row => {
+            filteredReport.forEach(row => {
 
-
-                // ---------------------------------------------
-                // DAILY TITLE
-                // ---------------------------------------------
-
-                if (
-                    row[0] &&
-                    row[0].startsWith("SALES -")
-                ) {
-
-                    html += `
-
-                        <tr>
-
-                            <td
-                                colspan="5"
-                                style="
-                                    font-weight:bold;
-                                    font-size:16px;
-                                "
-                            >
-
-                                ${row[0]}
-
-                            </td>
-
-                        </tr>
-
-                    `;
-
-                    return;
-
-                }
-
-
-                // ---------------------------------------------
-                // IGNORE HEADER
-                // ---------------------------------------------
-
+                // Skip header row
                 if (
                     row[0] === "DATE" &&
                     row[1] === "ITEM NAME"
@@ -1607,56 +1620,26 @@
 
                 }
 
-
-                // ---------------------------------------------
-                // DAILY TOTAL
-                // ---------------------------------------------
-
+                // Skip daily total initially, show at end
                 if (
                     row[1] === "DAILY TOTAL"
                 ) {
-
-                    html += `
-
-                        <tr>
-
-                            <td></td>
-
-                            <td>
-                                <strong>
-                                    DAILY TOTAL
-                                </strong>
-                            </td>
-
-                            <td></td>
-
-                            <td>
-                                <strong>
-                                    ${row[3]}
-                                </strong>
-                            </td>
-
-                            <td>
-                                <strong>
-                                    ₹${Number(
-                                        row[4] || 0
-                                    ).toLocaleString("en-IN")}
-                                </strong>
-                            </td>
-
-                        </tr>
-
-                    `;
 
                     return;
 
                 }
 
+                // Skip section headers
+                if (
+                    row[0] &&
+                    row[0].startsWith("SALES -")
+                ) {
 
-                // ---------------------------------------------
-                // NORMAL SALE
-                // ---------------------------------------------
+                    return;
 
+                }
+
+                // Add normal sale rows
                 html += `
 
                     <tr>
@@ -1711,6 +1694,48 @@
 
             });
 
+            // Add daily total at the end
+            const dailyTotal = filteredReport.find(
+                row => row[1] === "DAILY TOTAL"
+            );
+
+            if (dailyTotal) {
+
+                html += `
+
+                    <tr>
+
+                        <td></td>
+
+                        <td>
+                            <strong>
+                                DAILY TOTAL
+                            </strong>
+                        </td>
+
+                        <td></td>
+
+                        <td>
+                            <strong>
+                                ${dailyTotal[3]}
+                            </strong>
+                        </td>
+
+                        <td>
+                            <strong>
+                                ₹${Number(
+                                    dailyTotal[4] || 0
+                                ).toLocaleString("en-IN")}
+                            </strong>
+                        </td>
+
+                        <td></td>
+
+                    </tr>
+
+                `;
+
+            }
 
             html += `
 
@@ -1719,7 +1744,6 @@
                 </table>
 
             `;
-
 
             // =================================================
             // DISPLAY REPORT
@@ -1826,7 +1850,6 @@
                 error
             );
 
-
             container.innerHTML = `
 
                 <p style="color:red;">
@@ -1850,6 +1873,21 @@
             "dailySalesReportContainer"
         )
     ) {
+
+        // Set date input to today
+        const dateInput =
+            document.getElementById(
+                "currentDate"
+            );
+
+        if (dateInput) {
+
+            dateInput.value =
+                new Date()
+                    .toISOString()
+                    .split('T')[0];
+
+        }
 
         loadDailySalesReport();
 
