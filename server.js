@@ -88,95 +88,109 @@ async function downloadExcelFromGitHub() {
 
     }
 
+    try {
 
-    const url =
-        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
+        const url =
+            `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
 
 
-    const response =
-        await fetch(
-            url,
-            {
+        const response =
+            await fetch(
+                url,
+                {
 
-                headers: {
+                    headers: {
 
-                    "Authorization":
-                        `Bearer ${GITHUB_TOKEN}`,
+                        "Authorization":
+                            `Bearer ${GITHUB_TOKEN}`,
 
-                    "Accept":
-                        "application/vnd.github+json",
+                        "Accept":
+                            "application/vnd.github+json",
 
-                    "X-GitHub-Api-Version":
-                        "2022-11-28"
+                        "X-GitHub-Api-Version":
+                            "2022-11-28"
+
+                    }
 
                 }
+            );
 
-            }
+
+        if (!response.ok) {
+
+            const errorText =
+                await response.text();
+
+            console.warn(
+                `GitHub download failed: ${response.status} ${errorText}. Falling back to local sales.xlsx.`
+            );
+
+            return fs.readFileSync(filePath);
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.content) {
+
+            console.warn(
+                "GitHub file content is empty. Falling back to local sales.xlsx."
+            );
+
+            return fs.readFileSync(filePath);
+
+        }
+
+
+        const fileBuffer =
+            Buffer.from(
+                data.content.replace(/\n/g, ""),
+                "base64"
+            );
+
+
+        const dataFolder =
+            path.dirname(filePath);
+
+
+        if (!fs.existsSync(dataFolder)) {
+
+            fs.mkdirSync(
+                dataFolder,
+                { recursive: true }
+            );
+
+        }
+
+
+        fs.writeFileSync(
+            filePath,
+            fileBuffer
         );
 
 
-    if (!response.ok) {
-
-        const errorText =
-            await response.text();
-
-        throw new Error(
-            `GitHub download failed: ${response.status} ${errorText}`
+        console.log(
+            "Latest sales.xlsx downloaded from GitHub."
         );
+
+
+        return fileBuffer;
 
     }
 
+    catch (error) {
 
-    const data =
-        await response.json();
-
-
-    if (!data.content) {
-
-        throw new Error(
-            "GitHub file content is empty."
+        console.warn(
+            "GitHub download error. Falling back to local sales.xlsx.",
+            error.message
         );
+
+        return fs.readFileSync(filePath);
 
     }
-
-
-    const fileBuffer =
-        Buffer.from(
-            data.content.replace(/\n/g, ""),
-            "base64"
-        );
-
-
-    // Make sure local data folder exists
-
-    const dataFolder =
-        path.dirname(filePath);
-
-
-    if (!fs.existsSync(dataFolder)) {
-
-        fs.mkdirSync(
-            dataFolder,
-            {
-                recursive: true
-            }
-        );
-
-    }
-
-
-    fs.writeFileSync(
-        filePath,
-        fileBuffer
-    );
-
-
-    console.log(
-        "Latest sales.xlsx downloaded from GitHub."
-    );
-
-
-    return fileBuffer;
 
 }
 
@@ -191,12 +205,20 @@ async function uploadExcelToGitHub(
 
     await ensureLocalExcelFile();
 
-    if (!GITHUB_TOKEN) {
+    if (!fileBuffer) {
 
-        fs.writeFileSync(
-            filePath,
-            Buffer.from(fileBuffer)
+        throw new Error(
+            "Excel file buffer is empty."
         );
+
+    }
+
+    fs.writeFileSync(
+        filePath,
+        Buffer.from(fileBuffer)
+    );
+
+    if (!GITHUB_TOKEN) {
 
         console.log(
             "GITHUB_TOKEN is not configured. Local sales.xlsx updated."
@@ -206,133 +228,132 @@ async function uploadExcelToGitHub(
 
     }
 
+    try {
 
-    if (!fileBuffer) {
-
-        throw new Error(
-            "Excel file buffer is empty."
-        );
-
-    }
+        const content =
+            fileBuffer.toString("base64");
 
 
-    const content =
-        fileBuffer.toString("base64");
+        const getUrl =
+            `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
 
 
-    // =================================================
-    // GET CURRENT FILE SHA
-    // =================================================
+        const getResponse =
+            await fetch(
+                getUrl,
+                {
 
-    const getUrl =
-        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
+                    headers: {
 
+                        "Authorization":
+                            `Bearer ${GITHUB_TOKEN}`,
 
-    const getResponse =
-        await fetch(
-            getUrl,
-            {
+                        "Accept":
+                            "application/vnd.github+json",
 
-                headers: {
+                        "X-GitHub-Api-Version":
+                            "2022-11-28"
 
-                    "Authorization":
-                        `Bearer ${GITHUB_TOKEN}`,
-
-                    "Accept":
-                        "application/vnd.github+json",
-
-                    "X-GitHub-Api-Version":
-                        "2022-11-28"
+                    }
 
                 }
-
-            }
-        );
+            );
 
 
-    if (!getResponse.ok) {
+        if (!getResponse.ok) {
 
-        const errorText =
-            await getResponse.text();
+            const errorText =
+                await getResponse.text();
 
-        throw new Error(
-            `Unable to get GitHub file information: ${getResponse.status} ${errorText}`
+            console.warn(
+                `GitHub upload skipped: unable to get file info (${getResponse.status} ${errorText}). Local sales.xlsx was updated successfully.`
+            );
+
+            return;
+
+        }
+
+
+        const fileData =
+            await getResponse.json();
+
+
+        const updateUrl =
+            `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
+
+
+        const updateResponse =
+            await fetch(
+                updateUrl,
+                {
+
+                    method: "PUT",
+
+                    headers: {
+
+                        "Authorization":
+                            `Bearer ${GITHUB_TOKEN}`,
+
+                        "Accept":
+                            "application/vnd.github+json",
+
+                        "Content-Type":
+                            "application/json",
+
+                        "X-GitHub-Api-Version":
+                            "2022-11-28"
+
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            message:
+                                "Update sales.xlsx from DailyStock",
+
+                            content:
+                                content,
+
+                            sha:
+                                fileData.sha,
+
+                            branch:
+                                GITHUB_BRANCH
+
+                        })
+
+                }
+            );
+
+
+        if (!updateResponse.ok) {
+
+            const errorText =
+                await updateResponse.text();
+
+            console.warn(
+                `GitHub upload failed: ${updateResponse.status} ${errorText}. Local sales.xlsx was updated successfully.`
+            );
+
+            return;
+
+        }
+
+
+        console.log(
+            "sales.xlsx successfully updated in GitHub."
         );
 
     }
 
+    catch (error) {
 
-    const fileData =
-        await getResponse.json();
-
-
-    // =================================================
-    // UPDATE FILE
-    // =================================================
-
-    const updateUrl =
-        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
-
-
-    const updateResponse =
-        await fetch(
-            updateUrl,
-            {
-
-                method: "PUT",
-
-                headers: {
-
-                    "Authorization":
-                        `Bearer ${GITHUB_TOKEN}`,
-
-                    "Accept":
-                        "application/vnd.github+json",
-
-                    "Content-Type":
-                        "application/json",
-
-                    "X-GitHub-Api-Version":
-                        "2022-11-28"
-
-                },
-
-                body:
-                    JSON.stringify({
-
-                        message:
-                            "Update sales.xlsx from DailyStock",
-
-                        content:
-                            content,
-
-                        sha:
-                            fileData.sha,
-
-                        branch:
-                            GITHUB_BRANCH
-
-                    })
-
-            }
-        );
-
-
-    if (!updateResponse.ok) {
-
-        const errorText =
-            await updateResponse.text();
-
-        throw new Error(
-            `GitHub upload failed: ${updateResponse.status} ${errorText}`
+        console.warn(
+            "GitHub upload error. Local sales.xlsx remained updated.",
+            error.message
         );
 
     }
-
-
-    console.log(
-        "sales.xlsx successfully updated in GitHub."
-    );
 
 }
 
