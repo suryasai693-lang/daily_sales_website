@@ -3028,6 +3028,48 @@ app.post(
 
 
 // =====================================================
+// ADJUST STOCK
+// =====================================================
+
+app.post("/adjust-stock", async (req, res) => {
+    try {
+        const item = getText(req.body.item);
+        const quantity = Number(req.body.quantity);
+        const note = getText(req.body.note) || "Stock adjustment";
+        const date = getText(req.body.date) || new Date().toISOString().split("T")[0];
+
+        if (!item || !Number.isFinite(quantity) || quantity === 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return res.status(400).json({ success: false, message: "Enter an item, date, and a non-zero adjustment." });
+        }
+
+        await downloadExcelFromGitHub();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+
+        let supplySheet = workbook.getWorksheet("SUPPLY");
+        if (!supplySheet) supplySheet = workbook.addWorksheet("SUPPLY");
+        if (supplySheet.rowCount === 0) {
+            supplySheet.addRow(["DATE", "MONTH", "ITEM NAME", "QUANTITY", "TYPE", "NOTE"]);
+        }
+
+        const month = date.substring(0, 7);
+        supplySheet.addRow([date, month, item, quantity, "ADJUSTMENT", note]);
+        await rebuildMonthlyStock(workbook, month);
+
+        const updatedBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
+        fs.writeFileSync(filePath, updatedBuffer);
+        await uploadExcelToGitHubOnly(updatedBuffer);
+
+        res.json({ success: true, message: "Stock adjustment saved successfully." });
+    }
+    catch (error) {
+        console.error("ADJUST STOCK ERROR:", error);
+        res.status(500).json({ success: false, message: "Unable to save stock adjustment." });
+    }
+});
+
+
+// =====================================================
 // GET MONTHLY STOCK
 // =====================================================
 

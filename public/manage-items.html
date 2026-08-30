@@ -32,7 +32,7 @@
         </div>
         <div id="message" role="status"></div>
         <div class="content-card">
-            <div class="section-header"><div><h3>Item Master</h3><p>Select an item to edit its default values.</p></div></div>
+            <div class="section-header"><div><h3>Item Master</h3><p>Supply and Total Stock are for the current month.</p></div></div>
             <div class="table-container"><table><thead><tr><th>Item</th><th>Unit Price</th><th>Opening Quantity</th><th>Action</th></tr></thead><tbody id="itemsTable"><tr><td colspan="4">Loading items…</td></tr></tbody></table></div>
         </div>
     </main>
@@ -59,6 +59,55 @@ async function saveItem() {
         showMessage(result.message); closeEditor(); await loadItems();
     } catch (error) { showMessage(error.message, true); }
 }
+</script>
+<script>
+document.querySelector("#itemsTable").closest("table").querySelector("thead").innerHTML = "<tr><th>Item</th><th>Unit Price</th><th>Opening Quantity</th><th>Supply</th><th>Total Stock</th><th>Action</th></tr>";
+document.getElementById("editCard").insertAdjacentHTML("afterend", `
+<div class="form-card" id="adjustCard" hidden>
+  <h2>Adjust Stock</h2>
+  <div class="form-grid">
+    <div class="form-group"><label for="adjustItem">Item</label><input id="adjustItem" readonly></div>
+    <div class="form-group"><label for="adjustQuantity">Adjustment Quantity</label><input id="adjustQuantity" type="number" step="1" placeholder="Positive adds; negative removes"></div>
+    <div class="form-group"><label for="adjustNote">Reason</label><input id="adjustNote" placeholder="e.g. Purchase correction"></div>
+  </div>
+  <p class="form-help">Supply and Total Stock update automatically after saving.</p>
+  <div class="form-actions"><button class="primary-button" type="button" onclick="saveAdjustment()">Save Adjustment</button><button class="secondary-button" type="button" onclick="closeAdjustment()">Cancel</button></div>
+</div>`);
+
+async function loadItems() {
+  try {
+    const month = new Date().toISOString().slice(0, 7);
+    const [itemsResponse, stockResponse] = await Promise.all([fetch("/items"), fetch(`/monthly-stock?month=${month}`)]);
+    if (!itemsResponse.ok || !stockResponse.ok) throw new Error("Unable to load item stock");
+    const stockByItem = new Map((await stockResponse.json()).map(stock => [stock.itemName, stock]));
+    items = (await itemsResponse.json()).map(item => ({ ...item, ...(stockByItem.get(item.name) || { supply: 0, totalStock: item.openingStock }) }));
+    document.getElementById("itemsTable").innerHTML = items.map((item, index) => `<tr><td>${escapeHtml(item.name)}</td><td>${item.price}</td><td>${item.openingStock}</td><td>${item.supply}</td><td>${item.totalStock}</td><td><button class="secondary-button" type="button" onclick="editItem(${index})">Edit</button> <button class="secondary-button" type="button" onclick="adjustItem(${index})">Adjust</button></td></tr>`).join("") || '<tr><td colspan="6">No items found.</td></tr>';
+  } catch (error) { showMessage(error.message, true); }
+}
+
+function adjustItem(index) {
+  document.getElementById("adjustItem").value = items[index].name;
+  document.getElementById("adjustQuantity").value = "";
+  document.getElementById("adjustNote").value = "";
+  document.getElementById("adjustCard").hidden = false;
+  document.getElementById("adjustCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeAdjustment() { document.getElementById("adjustCard").hidden = true; }
+
+async function saveAdjustment() {
+  const item = document.getElementById("adjustItem").value;
+  const quantity = Number(document.getElementById("adjustQuantity").value);
+  const note = document.getElementById("adjustNote").value.trim();
+  if (!item || !quantity) { showMessage("Enter a non-zero adjustment quantity.", true); return; }
+  try {
+    const response = await fetch("/adjust-stock", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item, quantity, note }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Unable to save adjustment.");
+    showMessage(result.message); closeAdjustment(); await loadItems();
+  } catch (error) { showMessage(error.message, true); }
+}
+
 loadItems();
 </script>
 </body>
