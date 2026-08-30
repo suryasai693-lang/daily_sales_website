@@ -773,6 +773,57 @@ app.get(
 
 
 // =====================================================
+// UPDATE ITEM MASTER
+// =====================================================
+
+app.put("/items/:itemName", async (req, res) => {
+    try {
+        const itemName = decodeURIComponent(req.params.itemName).trim();
+        const unitPrice = Number(req.body.unitPrice);
+        const openingStock = Number(req.body.openingStock);
+
+        if (!itemName || !Number.isFinite(unitPrice) || unitPrice <= 0 ||
+            !Number.isFinite(openingStock) || openingStock < 0) {
+            return res.status(400).json({ success: false, message: "Enter a valid price and opening quantity." });
+        }
+
+        await downloadExcelFromGitHub();
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const itemMaster = workbook.getWorksheet("ITEM_MASTER");
+
+        if (!itemMaster) {
+            return res.status(500).json({ success: false, message: "ITEM_MASTER sheet not found." });
+        }
+
+        let itemRow;
+        itemMaster.eachRow((row, rowNumber) => {
+            if (rowNumber > 1 && getText(row.getCell(1).value).toLowerCase() === itemName.toLowerCase()) {
+                itemRow = row;
+            }
+        });
+
+        if (!itemRow) {
+            return res.status(404).json({ success: false, message: "Item not found." });
+        }
+
+        itemRow.getCell(2).value = unitPrice;
+        itemRow.getCell(3).value = openingStock;
+        await workbook.xlsx.writeFile(filePath);
+        await rebuildAllReports();
+        await uploadExcelToGitHub(fs.readFileSync(filePath));
+
+        res.json({ success: true, message: `"${getText(itemRow.getCell(1).value)}" updated successfully.` });
+    }
+    catch (error) {
+        console.error("UPDATE ITEM ERROR:", error);
+        res.status(500).json({ success: false, message: "Unable to update item." });
+    }
+});
+
+
+// =====================================================
 // GET CURRENT STOCK
 // =====================================================
 

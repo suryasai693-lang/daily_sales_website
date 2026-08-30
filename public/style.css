@@ -1017,3 +1017,19 @@ input[readonly] {
 .status-out-stock .status-dot {
     background-color: #dc2626;
 }
+
+.form-help {
+    margin: 16px 0 0;
+    color: #687386;
+    font-size: 13px;
+}
+
+.success-message,
+.error-message {
+    margin: 0 0 18px;
+    padding: 12px 14px;
+    border-radius: 8px;
+}
+
+.success-message { color: #166534; background: #dcfce7; }
+.error-message { color: #b91c1c; background: #fee2e2; }

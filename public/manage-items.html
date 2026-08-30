@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Items - DailyStock</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+    <aside class="sidebar">
+        <div class="logo"><div class="logo-icon">📦</div><div><div class="logo-name">DailyStock</div><div class="logo-subtitle">Inventory Management</div></div></div>
+        <nav class="navigation">
+            <button class="nav-button" onclick="window.location.href='index.html'"><span>⌂</span><span>Dashboard</span></button>
+            <button class="nav-button" onclick="window.location.href='sales.html'"><span>🛒</span><span>Sales</span></button>
+            <button class="nav-button" onclick="window.location.href='purchases.html'"><span>📦</span><span>Purchases</span></button>
+            <button class="nav-button" onclick="window.location.href='reports.html'"><span>📊</span><span>Reports</span></button>
+            <button class="nav-button active"><span>✏️</span><span>Manage Items</span></button>
+        </nav>
+    </aside>
+    <main class="main-content">
+        <header class="top-header"><div><h1>Manage Items</h1><p>Update an item’s default price and opening quantity.</p></div></header>
+        <div class="form-card" id="editCard" hidden>
+            <h2>Edit Item</h2>
+            <div class="form-grid">
+                <div class="form-group"><label for="itemName">Item</label><input id="itemName" type="text" readonly></div>
+                <div class="form-group"><label for="itemPrice">Unit Price</label><input id="itemPrice" type="number" min="0.01" step="0.01"></div>
+                <div class="form-group"><label for="itemStock">Opening Quantity</label><input id="itemStock" type="number" min="0" step="1"></div>
+            </div>
+            <p class="form-help">Use Purchases to add received stock. Opening quantity is for correcting the item’s starting stock.</p>
+            <div class="form-actions"><button class="primary-button" type="button" onclick="saveItem()">Save Changes</button><button class="secondary-button" type="button" onclick="closeEditor()">Cancel</button></div>
+        </div>
+        <div id="message" role="status"></div>
+        <div class="content-card">
+            <div class="section-header"><div><h3>Item Master</h3><p>Select an item to edit its default values.</p></div></div>
+            <div class="table-container"><table><thead><tr><th>Item</th><th>Unit Price</th><th>Opening Quantity</th><th>Action</th></tr></thead><tbody id="itemsTable"><tr><td colspan="4">Loading items…</td></tr></tbody></table></div>
+        </div>
+    </main>
+</div>
+<script>
+let items = [];
+function showMessage(message, isError = false) { const element = document.getElementById("message"); element.textContent = message; element.className = isError ? "error-message" : "success-message"; }
+function escapeHtml(value) { const element = document.createElement("div"); element.textContent = value; return element.innerHTML; }
+async function loadItems() {
+    try {
+        const response = await fetch("/items"); if (!response.ok) throw new Error("Unable to load items");
+        items = await response.json();
+        document.getElementById("itemsTable").innerHTML = items.map((item, index) => `<tr><td>${escapeHtml(item.name)}</td><td>${item.price}</td><td>${item.openingStock}</td><td><button class="secondary-button" type="button" onclick="editItem(${index})">Edit</button></td></tr>`).join("") || '<tr><td colspan="4">No items found.</td></tr>';
+    } catch (error) { showMessage(error.message, true); }
+}
+function editItem(index) { const item = items[index]; document.getElementById("itemName").value = item.name; document.getElementById("itemPrice").value = item.price; document.getElementById("itemStock").value = item.openingStock; document.getElementById("editCard").hidden = false; document.getElementById("editCard").scrollIntoView({ behavior: "smooth", block: "start" }); }
+function closeEditor() { document.getElementById("editCard").hidden = true; }
+async function saveItem() {
+    const itemName = document.getElementById("itemName").value, unitPrice = Number(document.getElementById("itemPrice").value), openingStock = Number(document.getElementById("itemStock").value);
+    if (!itemName || unitPrice <= 0 || openingStock < 0) { showMessage("Enter a valid price and opening quantity.", true); return; }
+    try {
+        const response = await fetch(`/items/${encodeURIComponent(itemName)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unitPrice, openingStock }) });
+        const result = await response.json(); if (!response.ok) throw new Error(result.message || "Unable to update item.");
+        showMessage(result.message); closeEditor(); await loadItems();
+    } catch (error) { showMessage(error.message, true); }
+}
+loadItems();
+</script>
+</body>
+</html>
