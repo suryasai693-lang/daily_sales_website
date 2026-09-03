@@ -839,6 +839,25 @@ input[readonly] {
 
     }
 
+    .report-controls {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .report-controls .form-group,
+    .report-controls .primary-button,
+    .report-controls .secondary-button {
+        width: 100%;
+    }
+
+    .report-controls .primary-button,
+    .report-controls .secondary-button {
+        height: auto;
+        min-height: 43px;
+    }
+
 }
 
 

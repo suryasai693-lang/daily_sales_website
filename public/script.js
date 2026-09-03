@@ -1516,49 +1516,27 @@
                 `SALES - ${selectedDay} ${selectedMonth} ${selectedYear}`;
 
             // Filter report to show only selected date
-            const filteredReport = [];
-            let foundDate = false;
+            const sectionStart = report.findIndex(
+                row => row[0] === expectedHeader
+            );
 
-            report.forEach(row => {
-
-                // Check if this is the date section header
-                if (
-                    row[0] &&
-                    row[0].startsWith("SALES -")
-                ) {
-
-                    if (
-                        row[0] === expectedHeader
-                    ) {
-                        foundDate = true;
-                        filteredReport.push(row);
-                    }
-                    else if (foundDate) {
-                        // We've moved past our date
-                        return;
-                    }
-
-                    return;
-                }
-
-                // Add rows only if we found our date
-                if (foundDate) {
-
-                    filteredReport.push(row);
-
-                    // Stop when we hit next date section
-                    if (
+            const nextSectionStart = sectionStart === -1
+                ? -1
+                : report.findIndex(
+                    (row, index) =>
+                        index > sectionStart &&
                         row[0] &&
                         row[0].startsWith("SALES -")
-                    ) {
+                );
 
-                        return;
-
-                    }
-
-                }
-
-            });
+            const filteredReport = sectionStart === -1
+                ? []
+                : report.slice(
+                    sectionStart,
+                    nextSectionStart === -1
+                        ? report.length
+                        : nextSectionStart
+                );
 
             // =================================================
             // NO DATA
