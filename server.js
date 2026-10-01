@@ -3164,9 +3164,9 @@ app.put("/purchases/:rowNumber", async (req, res) => {
 
         if (!Number.isInteger(rowNumber) || rowNumber < 2 || !originalDate || !originalItem ||
             !Number.isFinite(Number(originalQuantity)) || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-            !requestedItem || !Number.isInteger(quantity) || quantity <= 0 ||
+            !requestedItem || !Number.isInteger(quantity) || quantity < 0 ||
             Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
-            return res.status(400).json({ success: false, message: "Enter a valid date, item, and positive whole-number quantity." });
+            return res.status(400).json({ success: false, message: "Enter a valid date, item, and non-negative whole-number quantity." });
         }
 
         await downloadExcelFromGitHub();
@@ -3212,6 +3212,46 @@ app.put("/purchases/:rowNumber", async (req, res) => {
     catch (error) {
         console.error("UPDATE PURCHASE ERROR:", error);
         res.status(500).json({ success: false, message: "Unable to update purchase." });
+    }
+});
+
+app.delete("/purchases/:rowNumber", async (req, res) => {
+    try {
+        const rowNumber = Number(req.params.rowNumber);
+        const { originalDate, originalItem, originalQuantity } = req.body || {};
+
+        if (!Number.isInteger(rowNumber) || rowNumber < 2 || !originalDate || !originalItem ||
+            !Number.isFinite(Number(originalQuantity))) {
+            return res.status(400).json({ success: false, message: "Purchase details are required." });
+        }
+
+        await downloadExcelFromGitHub();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const supplySheet = workbook.getWorksheet("SUPPLY");
+
+        if (!supplySheet || rowNumber > supplySheet.rowCount) {
+            return res.status(404).json({ success: false, message: "Purchase not found." });
+        }
+
+        const row = supplySheet.getRow(rowNumber);
+        if (getText(row.getCell(5).value).toUpperCase() === "ADJUSTMENT" ||
+            getDate(row.getCell(1).value) !== originalDate ||
+            getText(row.getCell(3).value) !== originalItem ||
+            Number(row.getCell(4).value || 0) !== Number(originalQuantity)) {
+            return res.status(409).json({ success: false, message: "This purchase changed since it was loaded. Refresh and try again." });
+        }
+
+        supplySheet.spliceRows(rowNumber, 1);
+        await workbook.xlsx.writeFile(filePath);
+        await rebuildAllReports();
+        await uploadExcelToGitHubOnly(fs.readFileSync(filePath));
+
+        res.json({ success: true, message: "Purchase deleted and stock reports updated." });
+    }
+    catch (error) {
+        console.error("DELETE PURCHASE ERROR:", error);
+        res.status(500).json({ success: false, message: "Unable to delete purchase." });
     }
 });
 

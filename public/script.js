@@ -560,6 +560,15 @@
                 editButton.textContent = "Edit";
                 editButton.addEventListener("click", () => editPurchase(purchase));
                 actionCell.appendChild(editButton);
+
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.className = "secondary-button";
+                deleteButton.textContent = "Delete";
+                deleteButton.style.marginLeft = "6px";
+                deleteButton.addEventListener("click", () => deletePurchase(purchase));
+                actionCell.appendChild(deleteButton);
+
                 row.appendChild(actionCell);
                 tableBody.appendChild(row);
             });
@@ -579,6 +588,7 @@
         document.getElementById("supplyDate").value = purchase.date;
         document.getElementById("supplyItem").value = purchase.item;
         document.getElementById("supplyQuantity").value = purchase.quantity;
+        document.getElementById("supplyQuantity").min = "0";
         document.getElementById("supplyFormTitle").textContent = "Edit Purchase";
         document.getElementById("saveSupplyButton").textContent = "Save Changes";
         document.getElementById("cancelSupplyEditButton").hidden = false;
@@ -590,9 +600,41 @@
         document.getElementById("supplyDate").value = "";
         document.getElementById("supplyItem").value = "";
         document.getElementById("supplyQuantity").value = "";
+        document.getElementById("supplyQuantity").min = "1";
         document.getElementById("supplyFormTitle").textContent = "New Purchase";
         document.getElementById("saveSupplyButton").textContent = "💾 Save Purchase";
         document.getElementById("cancelSupplyEditButton").hidden = true;
+    }
+
+    async function deletePurchase(purchase) {
+        const confirmed = window.confirm(
+            `Delete this purchase of ${purchase.quantity} ${purchase.item} dated ${purchase.date}? Stock reports will be recalculated.`
+        );
+        if (!confirmed) return;
+
+        try {
+            const response = await fetch(`/purchases/${purchase.rowNumber}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    originalDate: purchase.date,
+                    originalItem: purchase.item,
+                    originalQuantity: purchase.quantity
+                })
+            });
+            const result = await response.json();
+            const message = document.getElementById("message");
+            message.textContent = result.message;
+            message.className = response.ok ? "success-message" : "error-message";
+            if (!response.ok) return;
+
+            if (editingPurchase?.rowNumber === purchase.rowNumber) cancelSupplyEdit();
+            await loadPurchases();
+        } catch (error) {
+            const message = document.getElementById("message");
+            message.textContent = error.message || "Unable to delete purchase.";
+            message.className = "error-message";
+        }
     }
 
     async function saveSupply() {
@@ -621,7 +663,7 @@
             !date ||
             !item ||
             !Number.isInteger(quantity) ||
-            quantity <= 0
+            (editingPurchase ? quantity < 0 : quantity <= 0)
         ) {
 
             alert(
