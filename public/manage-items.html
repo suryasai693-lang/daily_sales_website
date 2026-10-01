@@ -97,7 +97,7 @@ function closeAdjustment() { document.getElementById("adjustCard").hidden = true
 
 async function deleteItem(index) {
   const item = items[index];
-  if (!item || !window.confirm(`Remove "${item.name}" from the item list? Existing sales and supply history will be preserved.`)) return;
+  if (!item || !window.confirm(`Permanently delete "${item.name}" and all its sales, supply, and stock history? This cannot be undone.`)) return;
   try {
     const response = await fetch(`/items/${encodeURIComponent(item.name)}`, { method: "DELETE" });
     const result = await response.json();

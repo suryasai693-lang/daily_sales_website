@@ -850,22 +850,39 @@ app.delete("/items/:itemName", async (req, res) => {
         }
 
         const deletedName = getText(itemMaster.getRow(itemRowNumber).getCell(1).value);
-        const stockSheet = workbook.getWorksheet("MONTHLY_STOCK");
-        if (stockSheet) {
-            const stockRowsToDelete = [];
-            stockSheet.eachRow((row, rowNumber) => {
-                if (rowNumber > 1 && getText(row.getCell(2).value).toLowerCase() === deletedName.toLowerCase()) {
-                    stockRowsToDelete.push(rowNumber);
+        const removedRecords = {};
+        const itemColumns = [
+            ["SALES", 3],
+            ["SUPPLY", 3],
+            ["MONTHLY_STOCK", 2]
+        ];
+
+        for (const [sheetName, itemColumn] of itemColumns) {
+            const sheet = workbook.getWorksheet(sheetName);
+            if (!sheet) continue;
+
+            const rowsToDelete = [];
+            sheet.eachRow((row, rowNumber) => {
+                if (rowNumber > 1 && getText(row.getCell(itemColumn).value).toLowerCase() === deletedName.toLowerCase()) {
+                    rowsToDelete.push(rowNumber);
                 }
             });
-            stockRowsToDelete.reverse().forEach(rowNumber => stockSheet.spliceRows(rowNumber, 1));
+
+            rowsToDelete.reverse().forEach(rowNumber => sheet.spliceRows(rowNumber, 1));
+            removedRecords[sheetName] = rowsToDelete.length;
         }
+
         itemMaster.spliceRows(itemRowNumber, 1);
         await workbook.xlsx.writeFile(filePath);
         await rebuildAllReports();
         await uploadExcelToGitHub(fs.readFileSync(filePath));
 
-        res.json({ success: true, message: `"${deletedName}" removed. Existing transaction history was preserved.` });
+        const removedSales = removedRecords.SALES || 0;
+        const removedSupplies = removedRecords.SUPPLY || 0;
+        res.json({
+            success: true,
+            message: `"${deletedName}" and all its history were permanently deleted (${removedSales} sales, ${removedSupplies} supply records).`
+        });
     }
     catch (error) {
         console.error("DELETE ITEM ERROR:", error);
