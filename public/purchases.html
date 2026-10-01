@@ -118,7 +118,7 @@
             <div>
 
                 <h2>
-                    New Purchase
+                    <span id="supplyFormTitle">New Purchase</span>
                 </h2>
 
                 <p>
@@ -192,9 +192,20 @@
 
                 <button
                     class="primary-button"
+                    id="saveSupplyButton"
+                    type="button"
                     onclick="saveSupply()"
                 >
                     💾 Save Purchase
+                </button>
+                <button
+                    class="secondary-button"
+                    id="cancelSupplyEditButton"
+                    type="button"
+                    onclick="cancelSupplyEdit()"
+                    hidden
+                >
+                    Cancel
                 </button>
 
             </div>
@@ -203,6 +214,30 @@
 
 
         <div id="message"></div>
+
+        <section class="content-card" style="margin-top: 24px;">
+            <div class="section-header">
+                <div>
+                    <h3>Purchase History</h3>
+                    <p>Change the date, item, or quantity of a recorded purchase.</p>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Item</th>
+                            <th>Quantity</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchasesTable">
+                        <tr><td colspan="4">Loading purchases...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
     </main>
 

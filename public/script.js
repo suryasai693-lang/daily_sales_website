@@ -523,6 +523,78 @@
     // SAVE SUPPLY / PURCHASE
     // =======================================
 
+    let editingPurchase = null;
+
+    async function loadPurchases() {
+        const tableBody = document.getElementById("purchasesTable");
+        if (!tableBody) return;
+
+        try {
+            const response = await fetch("/purchases");
+            const purchases = await response.json();
+            if (!response.ok) throw new Error(purchases.message || "Unable to load purchases.");
+
+            tableBody.replaceChildren();
+            if (!purchases.length) {
+                const emptyRow = document.createElement("tr");
+                const emptyCell = document.createElement("td");
+                emptyCell.colSpan = 4;
+                emptyCell.textContent = "No purchases found.";
+                emptyRow.appendChild(emptyCell);
+                tableBody.appendChild(emptyRow);
+                return;
+            }
+
+            purchases.forEach(purchase => {
+                const row = document.createElement("tr");
+                for (const value of [purchase.date, purchase.item, purchase.quantity]) {
+                    const cell = document.createElement("td");
+                    cell.textContent = String(value);
+                    row.appendChild(cell);
+                }
+
+                const actionCell = document.createElement("td");
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.className = "secondary-button";
+                editButton.textContent = "Edit";
+                editButton.addEventListener("click", () => editPurchase(purchase));
+                actionCell.appendChild(editButton);
+                row.appendChild(actionCell);
+                tableBody.appendChild(row);
+            });
+        } catch (error) {
+            tableBody.replaceChildren();
+            const errorRow = document.createElement("tr");
+            const errorCell = document.createElement("td");
+            errorCell.colSpan = 4;
+            errorCell.textContent = error.message || "Unable to load purchases.";
+            errorRow.appendChild(errorCell);
+            tableBody.appendChild(errorRow);
+        }
+    }
+
+    function editPurchase(purchase) {
+        editingPurchase = purchase;
+        document.getElementById("supplyDate").value = purchase.date;
+        document.getElementById("supplyItem").value = purchase.item;
+        document.getElementById("supplyQuantity").value = purchase.quantity;
+        document.getElementById("supplyFormTitle").textContent = "Edit Purchase";
+        document.getElementById("saveSupplyButton").textContent = "Save Changes";
+        document.getElementById("cancelSupplyEditButton").hidden = false;
+        document.getElementById("supplyForm").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function cancelSupplyEdit() {
+        editingPurchase = null;
+        document.getElementById("supplyDate").value = "";
+        document.getElementById("supplyItem").value = "";
+        document.getElementById("supplyQuantity").value = "";
+        document.getElementById("supplyFormTitle").textContent = "New Purchase";
+        document.getElementById("saveSupplyButton").textContent = "💾 Save Purchase";
+        document.getElementById("cancelSupplyEditButton").hidden = true;
+    }
+
     async function saveSupply() {
 
         const date =
@@ -548,6 +620,7 @@
         if (
             !date ||
             !item ||
+            !Number.isInteger(quantity) ||
             quantity <= 0
         ) {
 
@@ -564,10 +637,10 @@
 
             const response =
                 await fetch(
-                    "/save-supply",
+                    editingPurchase ? `/purchases/${editingPurchase.rowNumber}` : "/save-supply",
                     {
 
-                        method: "POST",
+                        method: editingPurchase ? "PUT" : "POST",
 
                         headers: {
 
@@ -585,7 +658,13 @@
                                 item,
 
                             quantity:
-                                quantity
+                                quantity,
+
+                            ...(editingPurchase ? {
+                                originalDate: editingPurchase.date,
+                                originalItem: editingPurchase.item,
+                                originalQuantity: editingPurchase.quantity
+                            } : {})
 
                         })
 
@@ -607,17 +686,19 @@
 
                 message.textContent =
                     result.message;
+                message.className = response.ok ? "success-message" : "error-message";
 
             }
 
+            if (!response.ok) return;
 
-            if (result.success) {
-
-                document.getElementById(
-                    "supplyQuantity"
-                ).value = "";
-
+            if (editingPurchase) {
+                cancelSupplyEdit();
+            } else {
+                document.getElementById("supplyQuantity").value = "";
             }
+
+            await loadPurchases();
 
         }
 
@@ -1103,6 +1184,8 @@
 
     // Load items for Sales and Purchase dropdowns
     loadItems();
+
+    loadPurchases();
 
     // Load inventory on the dashboard only
     if (document.getElementById("dashboardInventory")) {

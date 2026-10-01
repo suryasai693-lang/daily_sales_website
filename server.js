@@ -1260,7 +1260,6 @@ async function rebuildMonthlyStock(
             "SALES"
         );
 
-
     const supplySheet =
         workbook.getWorksheet(
             "SUPPLY"
@@ -3126,6 +3125,96 @@ app.post(
     }
 );
 
+app.get("/purchases", async (req, res) => {
+    try {
+        await downloadExcelFromGitHub();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const sheet = workbook.getWorksheet("SUPPLY");
+
+        if (!sheet) return res.json([]);
+
+        const purchases = [];
+        sheet.eachRow((row, rowNumber) => {
+            if (rowNumber <= 1 || getText(row.getCell(5).value).toUpperCase() === "ADJUSTMENT") return;
+
+            const date = getDate(row.getCell(1).value);
+            const item = getText(row.getCell(3).value);
+            if (!date || !item) return;
+
+            purchases.push({ rowNumber, date, item, quantity: Number(row.getCell(4).value || 0) });
+        });
+
+        res.json(purchases.reverse());
+    }
+    catch (error) {
+        console.error("GET PURCHASES ERROR:", error);
+        res.status(500).json({ success: false, message: "Unable to load purchases." });
+    }
+});
+
+app.put("/purchases/:rowNumber", async (req, res) => {
+    try {
+        const rowNumber = Number(req.params.rowNumber);
+        const { originalDate, originalItem, originalQuantity } = req.body || {};
+        const date = getText(req.body?.date);
+        const requestedItem = getText(req.body?.item);
+        const quantity = Number(req.body?.quantity);
+        const parsedDate = new Date(`${date}T00:00:00.000Z`);
+
+        if (!Number.isInteger(rowNumber) || rowNumber < 2 || !originalDate || !originalItem ||
+            !Number.isFinite(Number(originalQuantity)) || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+            !requestedItem || !Number.isInteger(quantity) || quantity <= 0 ||
+            Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
+            return res.status(400).json({ success: false, message: "Enter a valid date, item, and positive whole-number quantity." });
+        }
+
+        await downloadExcelFromGitHub();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const supplySheet = workbook.getWorksheet("SUPPLY");
+        const itemSheet = workbook.getWorksheet("ITEM_MASTER");
+
+        if (!supplySheet || rowNumber > supplySheet.rowCount) {
+            return res.status(404).json({ success: false, message: "Purchase not found." });
+        }
+
+        const row = supplySheet.getRow(rowNumber);
+        if (getText(row.getCell(5).value).toUpperCase() === "ADJUSTMENT" ||
+            getDate(row.getCell(1).value) !== originalDate ||
+            getText(row.getCell(3).value) !== originalItem ||
+            Number(row.getCell(4).value || 0) !== Number(originalQuantity)) {
+            return res.status(409).json({ success: false, message: "This purchase changed since it was loaded. Refresh and try again." });
+        }
+
+        let canonicalItem;
+        itemSheet?.eachRow((itemRow, itemRowNumber) => {
+            if (itemRowNumber > 1 && getText(itemRow.getCell(1).value).toLowerCase() === requestedItem.toLowerCase()) {
+                canonicalItem = getText(itemRow.getCell(1).value);
+            }
+        });
+
+        if (!canonicalItem) {
+            return res.status(404).json({ success: false, message: "Selected item was not found." });
+        }
+
+        row.getCell(1).value = date;
+        row.getCell(2).value = date.substring(0, 7);
+        row.getCell(3).value = canonicalItem;
+        row.getCell(4).value = quantity;
+
+        await workbook.xlsx.writeFile(filePath);
+        await rebuildAllReports();
+        await uploadExcelToGitHubOnly(fs.readFileSync(filePath));
+
+        res.json({ success: true, message: "Purchase updated successfully." });
+    }
+    catch (error) {
+        console.error("UPDATE PURCHASE ERROR:", error);
+        res.status(500).json({ success: false, message: "Unable to update purchase." });
+    }
+});
+
 
 // =====================================================
 // ADJUST STOCK
@@ -3388,6 +3477,11 @@ async function rebuildAllReports() {
             "SALES"
         );
 
+    const supplySheet =
+        workbook.getWorksheet(
+            "SUPPLY"
+        );
+
 
     // =================================================
     // FIND ALL MONTHS
@@ -3432,6 +3526,26 @@ async function rebuildAllReports() {
 
     }
 
+    if (supplySheet) {
+
+        for (
+            let rowNumber = 2;
+            rowNumber <= supplySheet.rowCount;
+            rowNumber++
+        ) {
+
+            const row = supplySheet.getRow(rowNumber);
+            const date = getDate(row.getCell(1).value);
+            const month = getText(row.getCell(2).value) || date.substring(0, 7);
+
+            if (month) {
+                months.add(month);
+            }
+
+        }
+
+    }
+
 
     // =================================================
     // ALWAYS CURRENT MONTH
@@ -3447,7 +3561,7 @@ async function rebuildAllReports() {
     // =================================================
 
     for (
-        const month of months
+        const month of [...months].sort()
     ) {
 
         await rebuildMonthlyStock(
