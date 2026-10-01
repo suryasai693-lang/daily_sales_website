@@ -233,6 +233,32 @@
             </div>
 
 
+            <div class="form-card" id="saleEditCard" hidden style="margin-bottom: 20px;">
+                <h3>Edit Sale</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="saleEditDate">Date</label>
+                        <input id="saleEditDate" type="date">
+                    </div>
+                    <div class="form-group">
+                        <label for="saleEditItem">Item</label>
+                        <select id="saleEditItem"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="saleEditQuantity">Quantity</label>
+                        <input id="saleEditQuantity" type="number" min="1" step="1">
+                    </div>
+                </div>
+                <p id="saleEditStatus" role="status" aria-live="polite"></p>
+                <div class="form-actions">
+                    <button class="primary-button" id="saveSaleEditButton" type="button" onclick="saveDailySaleEdit()">Save Changes</button>
+                    <button class="secondary-button" type="button" onclick="closeDailySaleEditor()">Cancel</button>
+                </div>
+            </div>
+
+            <p id="saleReportStatus" role="status" aria-live="polite"></p>
+
+
             <!-- REPORT -->
 
             <div class="content-card">

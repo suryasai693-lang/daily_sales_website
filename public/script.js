@@ -1880,13 +1880,6 @@
                             const item =
                                 button.dataset.item;
 
-                            const price =
-                                Number(
-                                    button.dataset.price
-                                        .replace("₹", "")
-                                        .replace(/,/g, "")
-                                );
-
                             const quantity =
                                 Number(
                                     button.dataset.quantity
@@ -1898,105 +1891,37 @@
 
                             }
 
-                            // Show edit form
-                            const newQuantity =
-                                prompt(
-                                    `Edit quantity for ${item} on ${date}\nCurrent quantity: ${quantity}`,
-                                    quantity
-                                );
-
-                            if (
-                                newQuantity === null
-                            ) {
-
-                                return;
-
-                            }
-
-                            const parsedQuantity =
-                                Number(
-                                    newQuantity
-                                );
-
-                            if (
-                                isNaN(parsedQuantity) ||
-                                parsedQuantity <= 0
-                            ) {
-
-                                alert(
-                                    "Please enter a valid quantity."
-                                );
-
-                                return;
-
-                            }
-
                             try {
-
-                                const response =
-                                    await fetch(
-                                        "/update-sale",
-                                        {
-
-                                            method: "PUT",
-
-                                            headers: {
-
-                                                "Content-Type":
-                                                    "application/json"
-
-                                            },
-
-                                            body:
-                                                JSON.stringify({
-
-                                                    date,
-
-                                                    item,
-
-                                                    oldQuantity:
-                                                        quantity,
-
-                                                    newQuantity:
-                                                        parsedQuantity
-
-                                                })
-
-                                        }
-                                    );
-
-                                const result =
-                                    await response.json();
-
-                                if (!response.ok) {
-
-                                    throw new Error(
-                                        result.message ||
-                                        "Unable to update sale"
-                                    );
-
+                                const itemsResponse = await fetch("/items");
+                                if (!itemsResponse.ok) {
+                                    throw new Error("Unable to load items.");
                                 }
+                                const items = await itemsResponse.json();
+                                const editCard = document.getElementById("saleEditCard");
+                                const itemSelect = document.getElementById("saleEditItem");
+                                const status = document.getElementById("saleEditStatus");
 
-                                alert(
-                                    result.message
-                                );
+                                itemSelect.replaceChildren();
+                                items.forEach(entry => {
+                                    const option = document.createElement("option");
+                                    option.value = entry.name;
+                                    option.textContent = entry.name;
+                                    itemSelect.appendChild(option);
+                                });
 
-                                loadDailySalesReport();
-
-                            }
-
-                            catch (error) {
-
-                                console.error(
-                                    "EDIT SALE ERROR:",
-                                    error
-                                );
-
-                                alert(
-                                    error.message ||
-                                    "Error updating sale."
-                                );
-
+                                editCard.dataset.originalDate = date;
+                                editCard.dataset.originalItem = item;
+                                document.getElementById("saleEditDate").value = date;
+                                itemSelect.value = item;
+                                document.getElementById("saleEditQuantity").value = quantity;
+                                status.textContent = "";
+                                status.className = "";
+                                editCard.hidden = false;
+                                editCard.scrollIntoView({ behavior: "smooth", block: "start" });
+                            } catch (error) {
+                                const reportStatus = document.getElementById("saleReportStatus");
+                                reportStatus.textContent = error.message || "Unable to load items.";
+                                reportStatus.className = "error-message";
                             }
 
                         }
@@ -2025,6 +1950,60 @@
 
         }
 
+    }
+
+    async function saveDailySaleEdit() {
+        const editCard = document.getElementById("saleEditCard");
+        const date = document.getElementById("saleEditDate").value;
+        const item = document.getElementById("saleEditItem").value;
+        const quantity = Number(document.getElementById("saleEditQuantity").value);
+        const status = document.getElementById("saleEditStatus");
+        const parsedDate = new Date(`${date}T00:00:00.000Z`);
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsedDate.getTime()) ||
+            parsedDate.toISOString().slice(0, 10) !== date || !item || !Number.isInteger(quantity) || quantity <= 0) {
+            status.textContent = "Enter a valid date, item, and positive whole-number quantity.";
+            status.className = "error-message";
+            return;
+        }
+
+        const saveButton = document.getElementById("saveSaleEditButton");
+        saveButton.disabled = true;
+        status.textContent = "Saving sale...";
+        status.className = "";
+
+        try {
+            const response = await fetch("/update-sale", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    originalDate: editCard.dataset.originalDate,
+                    originalItem: editCard.dataset.originalItem,
+                    newDate: date,
+                    newItem: item,
+                    newQuantity: quantity
+                })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || "Unable to update sale.");
+
+            editCard.hidden = true;
+            const dateInput = document.getElementById("currentDate");
+            if (dateInput) dateInput.value = date;
+            const reportStatus = document.getElementById("saleReportStatus");
+            reportStatus.textContent = result.message;
+            reportStatus.className = "success-message";
+            await loadDailySalesReport();
+        } catch (error) {
+            status.textContent = error.message || "Unable to update sale.";
+            status.className = "error-message";
+        } finally {
+            saveButton.disabled = false;
+        }
+    }
+
+    function closeDailySaleEditor() {
+        document.getElementById("saleEditCard").hidden = true;
     }
 
     // =====================================================

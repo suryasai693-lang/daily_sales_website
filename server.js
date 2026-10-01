@@ -822,6 +822,57 @@ app.put("/items/:itemName", async (req, res) => {
     }
 });
 
+app.delete("/items/:itemName", async (req, res) => {
+    try {
+        const itemName = decodeURIComponent(req.params.itemName).trim();
+        if (!itemName) {
+            return res.status(400).json({ success: false, message: "Item name is required." });
+        }
+
+        await downloadExcelFromGitHub();
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const itemMaster = workbook.getWorksheet("ITEM_MASTER");
+        if (!itemMaster) {
+            return res.status(500).json({ success: false, message: "ITEM_MASTER sheet not found." });
+        }
+
+        let itemRowNumber;
+        itemMaster.eachRow((row, rowNumber) => {
+            if (rowNumber > 1 && getText(row.getCell(1).value).toLowerCase() === itemName.toLowerCase()) {
+                itemRowNumber = rowNumber;
+            }
+        });
+
+        if (!itemRowNumber) {
+            return res.status(404).json({ success: false, message: "Item not found." });
+        }
+
+        const deletedName = getText(itemMaster.getRow(itemRowNumber).getCell(1).value);
+        const stockSheet = workbook.getWorksheet("MONTHLY_STOCK");
+        if (stockSheet) {
+            const stockRowsToDelete = [];
+            stockSheet.eachRow((row, rowNumber) => {
+                if (rowNumber > 1 && getText(row.getCell(2).value).toLowerCase() === deletedName.toLowerCase()) {
+                    stockRowsToDelete.push(rowNumber);
+                }
+            });
+            stockRowsToDelete.reverse().forEach(rowNumber => stockSheet.spliceRows(rowNumber, 1));
+        }
+        itemMaster.spliceRows(itemRowNumber, 1);
+        await workbook.xlsx.writeFile(filePath);
+        await rebuildAllReports();
+        await uploadExcelToGitHub(fs.readFileSync(filePath));
+
+        res.json({ success: true, message: `"${deletedName}" removed. Existing transaction history was preserved.` });
+    }
+    catch (error) {
+        console.error("DELETE ITEM ERROR:", error);
+        res.status(500).json({ success: false, message: "Unable to delete item." });
+    }
+});
+
 
 // =====================================================
 // GET CURRENT STOCK
@@ -2455,11 +2506,8 @@ app.delete(
             const sale =
                 req.body || {};
 
-            const date =
-                sale.date;
-
-            const item =
-                sale.item;
+            const date = sale.date;
+            const item = sale.item;
 
             if (!date || !item) {
 
@@ -2625,33 +2673,34 @@ app.put(
             const sale =
                 req.body || {};
 
-            const date =
-                sale.date;
-
-            const item =
-                sale.item;
-
-            const oldQuantity =
-                Number(
-                    sale.oldQuantity || 0
-                );
+            const originalDate = sale.originalDate || sale.date;
+            const originalItem = sale.originalItem || sale.item;
+            const newDate = sale.newDate || sale.date;
+            const newItem = sale.newItem || sale.item;
 
             const newQuantity =
                 Number(
                     sale.newQuantity || 0
                 );
 
-            if (!date || !item) {
+            if (!originalDate || !originalItem || !newDate || !newItem) {
 
                 return res.status(400).json({
 
                     success: false,
 
                     message:
-                        "Date and item are required to update a sale."
+                        "Original and updated date and item are required."
 
                 });
 
+            }
+
+            const parsedDate = new Date(`${newDate}T00:00:00.000Z`);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate) ||
+                Number.isNaN(parsedDate.getTime()) ||
+                parsedDate.toISOString().slice(0, 10) !== newDate) {
+                return res.status(400).json({ success: false, message: "Enter a valid sale date." });
             }
 
             if (
@@ -2670,12 +2719,6 @@ app.put(
 
             }
 
-            const month =
-                date.substring(
-                    0,
-                    7
-                );
-
             await downloadExcelFromGitHub();
 
             const workbook =
@@ -2685,6 +2728,8 @@ app.put(
 
             const salesSheet =
                 workbook.getWorksheet("SALES");
+
+            const itemSheet = workbook.getWorksheet("ITEM_MASTER");
 
             if (!salesSheet) {
 
@@ -2701,6 +2746,25 @@ app.put(
 
             let foundSale = false;
             let salePrice = 0;
+            let newItemPrice;
+            let updatedItem = newItem;
+
+            if (newItem !== originalItem) {
+                if (!itemSheet) {
+                    return res.status(500).json({ success: false, message: "ITEM_MASTER sheet not found." });
+                }
+
+                itemSheet.eachRow((row, rowNumber) => {
+                    if (rowNumber > 1 && getText(row.getCell(1).value).toLowerCase() === newItem.toLowerCase()) {
+                        newItemPrice = Number(row.getCell(2).value || 0);
+                        updatedItem = getText(row.getCell(1).value);
+                    }
+                });
+
+                if (newItemPrice === undefined) {
+                    return res.status(404).json({ success: false, message: "Updated item was not found." });
+                }
+            }
 
             for (
                 let rowNumber = 2;
@@ -2718,9 +2782,24 @@ app.put(
                     getText(row.getCell(3).value);
 
                 if (
-                    rowDate === date &&
-                    rowItem === item
+                    rowDate === originalDate &&
+                    rowItem === originalItem
                 ) {
+
+                    const conflictingSale = salesSheet.getRows(2, salesSheet.rowCount - 1)
+                        ?.some((candidate, index) => {
+                            const candidateRowNumber = index + 2;
+                            return candidateRowNumber !== rowNumber &&
+                                getDate(candidate.getCell(1).value) === newDate &&
+                                getText(candidate.getCell(3).value) === updatedItem;
+                        });
+
+                    if (conflictingSale) {
+                        return res.status(409).json({
+                            success: false,
+                            message: "A sale already exists for that date and item."
+                        });
+                    }
 
                     // Found the sale
                     salePrice =
@@ -2728,9 +2807,13 @@ app.put(
                             row.getCell(4).value || 0
                         );
 
-                    const newSaleValue =
-                        salePrice *
-                        newQuantity;
+                    const updatedPrice = newItemPrice ?? salePrice;
+                    const newSaleValue = updatedPrice * newQuantity;
+
+                    row.getCell(1).value = newDate;
+                    row.getCell(2).value = newDate.substring(0, 7);
+                    row.getCell(3).value = updatedItem;
+                    row.getCell(4).value = updatedPrice;
 
                     row.getCell(5).value =
                         newQuantity;
@@ -2759,10 +2842,10 @@ app.put(
 
             }
 
-            await rebuildMonthlyStock(
-                workbook,
-                month
-            );
+            const affectedMonths = new Set([originalDate.substring(0, 7), newDate.substring(0, 7)]);
+            for (const month of affectedMonths) {
+                await rebuildMonthlyStock(workbook, month);
+            }
 
             await rebuildDailySalesReport(
                 workbook

@@ -81,7 +81,7 @@ async function loadItems() {
     if (!itemsResponse.ok || !stockResponse.ok) throw new Error("Unable to load item stock");
     const stockByItem = new Map((await stockResponse.json()).map(stock => [stock.itemName, stock]));
     items = (await itemsResponse.json()).map(item => ({ ...item, ...(stockByItem.get(item.name) || { supply: 0, totalStock: item.openingStock }) }));
-    document.getElementById("itemsTable").innerHTML = items.map((item, index) => `<tr><td>${escapeHtml(item.name)}</td><td>${item.price}</td><td>${item.openingStock}</td><td>${item.supply}</td><td>${item.totalStock}</td><td><button class="secondary-button" type="button" onclick="editItem(${index})">Edit</button> <button class="secondary-button" type="button" onclick="adjustItem(${index})">Adjust</button></td></tr>`).join("") || '<tr><td colspan="6">No items found.</td></tr>';
+    document.getElementById("itemsTable").innerHTML = items.map((item, index) => `<tr><td>${escapeHtml(item.name)}</td><td>${item.price}</td><td>${item.openingStock}</td><td>${item.supply}</td><td>${item.totalStock}</td><td><button class="secondary-button" type="button" onclick="editItem(${index})">Edit</button> <button class="secondary-button" type="button" onclick="adjustItem(${index})">Adjust</button> <button class="secondary-button" type="button" onclick="deleteItem(${index})">Delete</button></td></tr>`).join("") || '<tr><td colspan="6">No items found.</td></tr>';
   } catch (error) { showMessage(error.message, true); }
 }
 
@@ -94,6 +94,19 @@ function adjustItem(index) {
 }
 
 function closeAdjustment() { document.getElementById("adjustCard").hidden = true; }
+
+async function deleteItem(index) {
+  const item = items[index];
+  if (!item || !window.confirm(`Remove "${item.name}" from the item list? Existing sales and supply history will be preserved.`)) return;
+  try {
+    const response = await fetch(`/items/${encodeURIComponent(item.name)}`, { method: "DELETE" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Unable to delete item.");
+    showMessage(result.message);
+    if (document.getElementById("itemName").value === item.name) closeEditor();
+    await loadItems();
+  } catch (error) { showMessage(error.message, true); }
+}
 
 async function saveAdjustment() {
   const item = document.getElementById("adjustItem").value;
